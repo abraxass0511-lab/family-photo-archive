@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="가족 추억 보관 상자 - 프라이빗 가족 사진 아카이브">
+    <title>가족 추억 보관 상자</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Leaflet.js (OpenStreetMap, 100% 무료) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin="anonymous" />
+    <!-- Leaflet MarkerCluster -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <!-- ===================== 암호 잠금 화면 ===================== -->
+    <div id="auth-screen" class="screen active">
+        <div class="auth-container">
+            <div class="auth-glow"></div>
+            <div class="auth-card">
+                <div class="auth-icon">
+                    <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                        <rect x="16" y="28" width="32" height="24" rx="4" stroke="currentColor" stroke-width="2.5"/>
+                        <path d="M24 28V20C24 15.5817 27.5817 12 32 12C36.4183 12 40 15.5817 40 20V28" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                        <circle cx="32" cy="38" r="3" fill="currentColor"/>
+                        <line x1="32" y1="41" x2="32" y2="46" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <h1 class="auth-title">가족 추억 보관 상자</h1>
+                <p class="auth-subtitle">소중한 추억을 안전하게 보관합니다</p>
+                <form id="auth-form" onsubmit="return handleLogin(event)">
+                    <div class="input-group">
+                        <input type="password" id="password-input" placeholder="가족 비밀번호를 입력하세요"
+                               autocomplete="off" required minlength="4">
+                        <button type="submit" id="login-btn" class="btn-primary">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p id="auth-error" class="error-msg hidden">비밀번호가 올바르지 않습니다</p>
+                </form>
+                <div class="auth-footer">
+                    <span class="lock-icon">🔒</span> 클라이언트 암호화 보호
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================== 메인 앱 화면 ===================== -->
+    <div id="app-screen" class="screen">
+        <!-- 헤더 -->
+        <header class="app-header">
+            <div class="header-left">
+                <h1 class="header-title">📸 가족 추억 보관 상자</h1>
+            </div>
+            <nav class="header-nav">
+                <button class="nav-btn active" data-view="map" onclick="switchView('map')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+                        <line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+                    </svg>
+                    지도
+                </button>
+                <button class="nav-btn" data-view="gallery" onclick="switchView('gallery')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                    </svg>
+                    갤러리
+                </button>
+                <button class="nav-btn" data-view="people" onclick="switchView('people')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    인물
+                </button>
+            </nav>
+            <div class="header-right">
+                <button class="icon-btn" onclick="toggleFavoritesFilter()" id="fav-filter-btn" title="즐겨찾기">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                    </svg>
+                </button>
+                <button class="icon-btn danger" onclick="handleLogout()" title="로그아웃">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- 지도 뷰 -->
+        <div id="map-view" class="view active">
+            <div id="map-container"></div>
+            <!-- 하단 갤러리 슬라이드업 -->
+            <div id="bottom-gallery" class="bottom-gallery hidden">
+                <div class="gallery-handle" onclick="toggleBottomGallery()">
+                    <div class="handle-bar"></div>
+                </div>
+                <div class="gallery-header">
+                    <h3 id="gallery-place-name">장소명</h3>
+                    <span id="gallery-photo-count" class="badge">0장</span>
+                </div>
+                <div id="gallery-scroll" class="gallery-scroll"></div>
+            </div>
+        </div>
+
+        <!-- 갤러리 뷰 -->
+        <div id="gallery-view" class="view">
+            <div class="gallery-toolbar">
+                <div class="search-box">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input type="text" id="search-input" placeholder="장소, 날짜로 검색..." oninput="filterPhotos(this.value)">
+                </div>
+                <div class="sort-controls">
+                    <select id="sort-select" onchange="sortPhotos(this.value)">
+                        <option value="date-desc">최신순</option>
+                        <option value="date-asc">오래된순</option>
+                        <option value="place">장소별</option>
+                    </select>
+                    <button class="select-mode-btn" onclick="toggleSelectMode()">선택</button>
+                </div>
+            </div>
+            <div id="photo-grid" class="photo-grid"></div>
+        </div>
+
+        <!-- 인물 뷰 -->
+        <div id="people-view" class="view">
+            <div id="people-grid" class="people-grid"></div>
+            <div id="person-photos" class="person-photos hidden">
+                <button class="back-btn" onclick="showPeopleGrid()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+                    </svg>
+                    전체 인물
+                </button>
+                <h2 id="person-name" class="person-view-title"></h2>
+                <div id="person-photo-grid" class="photo-grid"></div>
+            </div>
+        </div>
+
+        <!-- 사진 상세 모달 -->
+        <div id="photo-modal" class="modal hidden">
+            <div class="modal-overlay" onclick="closeModal()"></div>
+            <div class="modal-content">
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+                <img id="modal-image" src="" alt="사진" class="modal-image">
+                <div class="modal-info">
+                    <div class="modal-meta">
+                        <p id="modal-date" class="meta-item">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+                                <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                            </svg>
+                            <span></span>
+                        </p>
+                        <p id="modal-place" class="meta-item">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                            </svg>
+                            <span></span>
+                        </p>
+                        <p id="modal-persons" class="meta-item">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                            </svg>
+                            <span></span>
+                        </p>
+                    </div>
+                    <button id="modal-fav-btn" class="fav-btn" onclick="toggleFavorite()">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/gallery.js"></script>
+</body>
+</html>

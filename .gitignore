@@ -1,0 +1,66 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.spec
+venv/
+.venv/
+env/
+
+# === Flutter ===
+app/.dart_tool/
+app/.packages
+app/.pub-cache/
+app/.pub/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/android/
+app/ios/
+app/linux/
+app/macos/
+app/windows/
+app/test/
+
+# === IDE ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# === 환경변수 (비밀 키 보호!) ===
+.env
+server/.env
+
+# === 데이터 & 빌드 ===
+*.db
+*.sqlite
+data/
+server/data/
+web/data/
+dist/
+build/
+*.exe
+
+# === 썸네일 & 미디어 ===
+thumbnails/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.mp4
+*.mov
+
+# === 로그 ===
+*.log
+logs/
+
+# === 시스템 ===
+node_modules/
+.gemini/

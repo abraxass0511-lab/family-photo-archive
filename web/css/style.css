@@ -1,0 +1,1135 @@
+/* ===================================================
+   가족 추억 보관 상자 — 프리미엄 다크 테마 디자인 시스템
+   =================================================== */
+
+/* --- CSS Variables (Design Tokens) --- */
+:root {
+    /* 다크 모드 컬러 팔레트 */
+    --bg-primary: #0a0a0f;
+    --bg-secondary: #12121a;
+    --bg-card: #1a1a28;
+    --bg-card-hover: #222236;
+    --bg-glass: rgba(26, 26, 40, 0.85);
+    --bg-overlay: rgba(0, 0, 0, 0.7);
+
+    /* 액센트 컬러 */
+    --accent-primary: #7c6aef;
+    --accent-primary-glow: rgba(124, 106, 239, 0.3);
+    --accent-secondary: #4ecdc4;
+    --accent-warm: #f7a072;
+    --accent-pink: #ff6b9d;
+    --accent-gradient: linear-gradient(135deg, #7c6aef 0%, #4ecdc4 100%);
+    --accent-gradient-warm: linear-gradient(135deg, #f7a072 0%, #ff6b9d 100%);
+
+    /* 텍스트 */
+    --text-primary: #e8e6f0;
+    --text-secondary: #9896a8;
+    --text-muted: #5c5a6e;
+    --text-accent: #a89cf7;
+
+    /* 보더 */
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-focus: rgba(124, 106, 239, 0.5);
+
+    /* 하트 */
+    --heart-color: #ff4d6d;
+    --heart-glow: rgba(255, 77, 109, 0.4);
+
+    /* 백업 완료 (초록 테두리) */
+    --backed-up-color: #2dcc70;
+    --backed-up-glow: rgba(45, 204, 112, 0.3);
+
+    /* 레이아웃 */
+    --header-height: 60px;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-xl: 28px;
+
+    /* 쉐도우 */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 30px var(--accent-primary-glow);
+
+    /* 트랜지션 */
+    --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: 400ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* --- Reset & Base --- */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+    font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+}
+
+/* --- Screen Management --- */
+.screen {
+    display: none;
+    width: 100%;
+    height: 100%;
+}
+.screen.active {
+    display: flex;
+    flex-direction: column;
+}
+
+/* =============================================
+   AUTH SCREEN (암호 잠금 화면)
+   ============================================= */
+#auth-screen {
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(circle at 20% 80%, rgba(124, 106, 239, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(78, 205, 196, 0.06) 0%, transparent 50%),
+        var(--bg-primary);
+    overflow: hidden;
+}
+
+.auth-container {
+    position: relative;
+    z-index: 1;
+}
+
+.auth-glow {
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, var(--accent-primary-glow) 0%, transparent 70%);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: pulse-glow 4s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(1); }
+    50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.2); }
+}
+
+.auth-card {
+    position: relative;
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    padding: 48px 40px;
+    width: 400px;
+    max-width: 90vw;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    animation: card-appear 0.6s var(--transition-smooth) both;
+}
+
+@keyframes card-appear {
+    from { opacity: 0; transform: translateY(30px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.auth-icon {
+    color: var(--accent-primary);
+    margin-bottom: 20px;
+    animation: icon-float 3s ease-in-out infinite;
+}
+
+@keyframes icon-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+.auth-title {
+    font-size: 24px;
+    font-weight: 700;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+}
+
+.auth-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+}
+
+.input-group {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.input-group input {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    font-size: 15px;
+    color: var(--text-primary);
+    font-family: inherit;
+    outline: none;
+    transition: var(--transition-fast);
+}
+
+.input-group input:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--accent-primary-glow);
+}
+
+.input-group input::placeholder {
+    color: var(--text-muted);
+}
+
+.btn-primary {
+    background: var(--accent-gradient);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 14px 18px;
+    cursor: pointer;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-fast);
+}
+
+.btn-primary:hover {
+    transform: scale(1.05);
+    box-shadow: var(--shadow-glow);
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
+}
+
+.error-msg {
+    color: #ff4d6d;
+    font-size: 13px;
+    margin-top: 4px;
+    animation: shake 0.4s ease-in-out;
+}
+
+.error-msg.hidden {
+    display: none;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+}
+
+.auth-footer {
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.lock-icon {
+    font-size: 11px;
+}
+
+/* =============================================
+   APP HEADER
+   ============================================= */
+.app-header {
+    height: var(--header-height);
+    background: var(--bg-glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 16px;
+    z-index: 1000;
+    flex-shrink: 0;
+}
+
+.header-title {
+    font-size: 16px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.header-nav {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.nav-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 8px 14px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition-fast);
+}
+
+.nav-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.nav-btn.active {
+    background: rgba(124, 106, 239, 0.15);
+    border-color: rgba(124, 106, 239, 0.3);
+    color: var(--text-accent);
+}
+
+.header-right {
+    display: flex;
+    gap: 8px;
+    margin-left: 16px;
+}
+
+.icon-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    padding: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: var(--transition-fast);
+}
+
+.icon-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.icon-btn.active {
+    color: var(--heart-color);
+    background: rgba(255, 77, 109, 0.1);
+}
+
+.icon-btn.danger:hover {
+    color: #ff4d6d;
+    background: rgba(255, 77, 109, 0.1);
+}
+
+/* =============================================
+   VIEW MANAGEMENT
+   ============================================= */
+.view {
+    display: none;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.view.active {
+    display: flex;
+    flex-direction: column;
+}
+
+/* =============================================
+   MAP VIEW
+   ============================================= */
+#map-container {
+    flex: 1;
+    width: 100%;
+    z-index: 1;
+}
+
+/* Leaflet 커스텀 스타일 (다크모드) */
+.leaflet-container {
+    background: var(--bg-primary) !important;
+}
+
+.leaflet-popup-content-wrapper {
+    background: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    border-radius: var(--radius-md) !important;
+    box-shadow: var(--shadow-md) !important;
+    border: 1px solid var(--border-subtle);
+}
+
+.leaflet-popup-tip {
+    background: var(--bg-card) !important;
+}
+
+.leaflet-popup-content {
+    margin: 12px 16px !important;
+    font-family: 'Noto Sans KR', sans-serif !important;
+}
+
+/* 마커 클러스터 커스텀 */
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+    background: rgba(124, 106, 239, 0.3) !important;
+}
+
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+    background: var(--accent-primary) !important;
+    color: white !important;
+    font-family: 'Noto Sans KR', sans-serif !important;
+    font-weight: 600;
+}
+
+/* 커스텀 마커 아이콘 */
+.custom-marker {
+    background: var(--accent-gradient);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 12px;
+    box-shadow: 0 2px 10px var(--accent-primary-glow);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    transition: var(--transition-fast);
+}
+
+.custom-marker:hover {
+    transform: scale(1.2);
+}
+
+/* =============================================
+   BOTTOM GALLERY (지도 하단 슬라이드업)
+   ============================================= */
+.bottom-gallery {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: 0 20px 20px;
+    z-index: 500;
+    max-height: 45%;
+    transition: transform var(--transition-smooth);
+    transform: translateY(0);
+}
+
+.bottom-gallery.hidden {
+    transform: translateY(100%);
+}
+
+.gallery-handle {
+    display: flex;
+    justify-content: center;
+    padding: 12px 0;
+    cursor: pointer;
+}
+
+.handle-bar {
+    width: 40px;
+    height: 4px;
+    background: var(--text-muted);
+    border-radius: 2px;
+}
+
+.gallery-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.gallery-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.badge {
+    background: rgba(124, 106, 239, 0.2);
+    color: var(--text-accent);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.gallery-scroll {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+}
+
+.gallery-scroll::-webkit-scrollbar {
+    height: 4px;
+}
+
+.gallery-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.gallery-scroll::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: 2px;
+}
+
+.gallery-scroll-item {
+    flex: 0 0 auto;
+    width: 140px;
+    height: 140px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    cursor: pointer;
+    scroll-snap-align: start;
+    position: relative;
+    transition: var(--transition-fast);
+}
+
+.gallery-scroll-item:hover {
+    transform: scale(1.05);
+}
+
+.gallery-scroll-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* =============================================
+   GALLERY VIEW (사진 그리드)
+   ============================================= */
+.gallery-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    flex-shrink: 0;
+}
+
+.search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    flex: 1;
+    max-width: 400px;
+    transition: var(--transition-fast);
+}
+
+.search-box:focus-within {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--accent-primary-glow);
+}
+
+.search-box svg {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.search-box input {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    width: 100%;
+}
+
+.search-box input::placeholder {
+    color: var(--text-muted);
+}
+
+.sort-controls select {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+}
+
+.photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+    padding: 0 20px 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.photo-grid::-webkit-scrollbar {
+    width: 6px;
+}
+
+.photo-grid::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.photo-grid::-webkit-scrollbar-thumb {
+    background: var(--text-muted);
+    border-radius: 3px;
+}
+
+.photo-card {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    background: var(--bg-card);
+}
+
+.photo-card:hover {
+    transform: scale(1.03);
+    box-shadow: var(--shadow-md);
+}
+
+.photo-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: var(--transition-normal);
+}
+
+.photo-card:hover img {
+    transform: scale(1.08);
+}
+
+/* 외장하드 전송 완료: 초록 테두리 */
+.photo-card.backed-up {
+    border: 2px solid var(--backed-up-color);
+    box-shadow: 0 0 8px var(--backed-up-glow);
+}
+
+/* 즐겨찾기 표시 */
+.photo-card .fav-indicator {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    color: var(--heart-color);
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+    font-size: 16px;
+    animation: heart-pop 0.3s ease;
+}
+
+@keyframes heart-pop {
+    0% { transform: scale(0); }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+}
+
+/* 사진 오버레이 (날짜/장소) */
+.photo-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 24px 10px 8px;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.8);
+    opacity: 0;
+    transition: var(--transition-fast);
+}
+
+.photo-card:hover .photo-overlay {
+    opacity: 1;
+}
+
+.photo-overlay .place-label {
+    display: block;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.photo-overlay .date-label {
+    display: block;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 2px;
+}
+
+/* =============================================
+   PEOPLE VIEW
+   ============================================= */
+.people-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 16px;
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.person-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.person-card:hover {
+    background: var(--bg-card-hover);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+}
+
+.person-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 12px;
+    border: 3px solid var(--accent-primary);
+    box-shadow: 0 0 15px var(--accent-primary-glow);
+}
+
+.person-avatar-placeholder {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--accent-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 auto 12px;
+}
+
+.person-name {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.person-count {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.person-photos {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.back-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    color: var(--text-accent);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.back-btn:hover {
+    color: var(--accent-primary);
+}
+
+.person-view-title {
+    padding: 0 20px 12px;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+/* =============================================
+   PHOTO MODAL (사진 상세)
+   ============================================= */
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    animation: fade-in 0.2s ease;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; }
+}
+
+.modal-content {
+    position: relative;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    animation: modal-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modal-pop {
+    from { transform: scale(0.9); opacity: 0; }
+}
+
+.modal-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+    z-index: 1;
+    transition: var(--transition-fast);
+}
+
+.modal-close:hover {
+    background: rgba(255, 77, 109, 0.7);
+    transform: scale(1.1);
+}
+
+.modal-image {
+    display: block;
+    max-width: 80vw;
+    max-height: 70vh;
+    object-fit: contain;
+}
+
+.modal-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.modal-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.meta-item svg {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.fav-btn {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: var(--transition-fast);
+}
+
+.fav-btn:hover {
+    color: var(--heart-color);
+    border-color: var(--heart-color);
+    background: rgba(255, 77, 109, 0.1);
+}
+
+.fav-btn.active {
+    color: var(--heart-color);
+    background: rgba(255, 77, 109, 0.15);
+    border-color: var(--heart-color);
+}
+
+.fav-btn.active svg {
+    fill: var(--heart-color);
+}
+
+/* =============================================
+   RESPONSIVE
+   ============================================= */
+@media (max-width: 768px) {
+    .header-title {
+        font-size: 14px;
+    }
+
+    .nav-btn span, .nav-btn {
+        font-size: 12px;
+        padding: 6px 10px;
+    }
+
+    .photo-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 4px;
+        padding: 0 8px 8px;
+    }
+
+    .people-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 8px;
+        padding: 12px;
+    }
+
+    .gallery-toolbar {
+        padding: 8px 12px;
+    }
+
+    .auth-card {
+        padding: 36px 24px;
+    }
+
+    .modal-image {
+        max-width: 95vw;
+        max-height: 60vh;
+    }
+}
+
+/* --- 유틸리티 --- */
+.hidden { display: none !important; }
+
+/* 로딩 스피너 */
+.spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(124, 106, 239, 0.2);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 빈 상태 */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.empty-state-text {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+}
+
+.empty-state-sub {
+    font-size: 13px;
+}
+
+/* =============================================
+   MULTI-SELECT (다중 선택 + 삭제 바)
+   ============================================= */
+
+/* 선택 모드 시 사진 카드에 체크박스 표시 */
+.photo-card .select-checkbox {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    background: rgba(0, 0, 0, 0.3);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+/* 선택 모드 활성화 시 체크박스 보이기 */
+.photo-grid.select-mode .photo-card .select-checkbox {
+    display: flex;
+}
+
+.photo-card.selected .select-checkbox {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+.photo-card.selected .select-checkbox::after {
+    content: '✓';
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.photo-card.selected {
+    outline: 3px solid var(--accent-primary);
+    outline-offset: -3px;
+}
+
+/* 하단 삭제 바 (붉은색) */
+.delete-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, #ff4d6d 0%, #e63946 100%);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 1500;
+    box-shadow: 0 -4px 20px rgba(255, 77, 109, 0.3);
+    animation: slide-up 0.3s ease;
+    transform: translateY(0);
+    transition: transform var(--transition-smooth);
+}
+
+.delete-bar.hidden {
+    transform: translateY(100%);
+    pointer-events: none;
+}
+
+@keyframes slide-up {
+    from { transform: translateY(100%); }
+}
+
+.delete-bar-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.delete-bar-count {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 700;
+}
+
+.delete-bar-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.delete-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--radius-sm);
+    padding: 10px 20px;
+    color: white;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.delete-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.delete-btn.primary {
+    background: white;
+    color: #e63946;
+    border-color: white;
+}
+
+.delete-btn.primary:hover {
+    background: #ffe0e6;
+}
+
+/* 선택 모드 토글 버튼 */
+.select-mode-btn {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.select-mode-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.select-mode-btn.active {
+    background: rgba(124, 106, 239, 0.15);
+    border-color: rgba(124, 106, 239, 0.3);
+    color: var(--text-accent);
+}
+
