@@ -32,9 +32,10 @@ class ExifService:
             )
         return self._geocoder
 
-    def extract_exif(self, image_bytes: bytes) -> dict:
+    def extract_exif(self, image_bytes: bytes, filename: str = "") -> dict:
         """
         이미지 바이트에서 EXIF 데이터 추출
+        동영상은 EXIF 추출 불가 → 파일명에서 날짜 추출 폴백
 
         Returns:
             {
@@ -60,6 +61,8 @@ class ExifService:
             exif_data = img._getexif()
 
             if not exif_data:
+                # EXIF 없으면 파일명에서 날짜 추출 시도
+                result["taken_at"] = self._parse_date_from_filename(filename)
                 return result
 
             # 태그별 데이터 추출
@@ -90,10 +93,56 @@ class ExifService:
         except Exception as e:
             print(f"⚠️ EXIF 추출 실패: {e}")
 
+        # EXIF에서 날짜를 못 찾았으면 파일명에서 추출
+        if not result["taken_at"] and filename:
+            result["taken_at"] = self._parse_date_from_filename(filename)
+
         return result
+
+    @staticmethod
+    def _parse_date_from_filename(filename: str) -> str | None:
+        """
+        파일명에서 날짜/시간 추출 (EXIF 없는 동영상 등에 사용)
+        지원 패턴:
+          - 20260530_133749.mp4 → 2026-05-30T13:37:49
+          - IMG_20260530_133749.jpg → 2026-05-30T13:37:49
+          - Screenshot_20260530_133749.jpg → 2026-05-30T13:37:49
+          - VID_20260530_133749.mp4 → 2026-05-30T13:37:49
+          - 20260530.jpg → 2026-05-30T00:00:00
+        """
+        import re
+
+        if not filename:
+            return None
+
+        # 패턴 1: YYYYMMDD_HHMMSS (가장 흔한 패턴)
+        match = re.search(r'(\d{4})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[\-_](\d{2})(\d{2})(\d{2})', filename)
+        if match:
+            try:
+                dt = datetime(
+                    int(match.group(1)), int(match.group(2)), int(match.group(3)),
+                    int(match.group(4)), int(match.group(5)), int(match.group(6))
+                )
+                return dt.isoformat()
+            except ValueError:
+                pass
+
+        # 패턴 2: YYYYMMDD만 (시간 없음)
+        match = re.search(r'(\d{4})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])', filename)
+        if match:
+            try:
+                dt = datetime(
+                    int(match.group(1)), int(match.group(2)), int(match.group(3))
+                )
+                return dt.isoformat()
+            except ValueError:
+                pass
+
+        return None
 
     def _parse_gps_info(self, gps_info: dict) -> dict | None:
         """GPS 태그 → 위도/경도 변환"""
+        import math
         try:
             gps_data = {}
             for key, val in gps_info.items():
@@ -105,6 +154,8 @@ class ExifService:
             lat_ref = gps_data.get("GPSLatitudeRef", "N")
             if lat:
                 latitude = self._convert_to_degrees(lat)
+                if math.isnan(latitude) or latitude == 0.0:
+                    return None
                 if lat_ref == "S":
                     latitude = -latitude
             else:
@@ -115,6 +166,8 @@ class ExifService:
             lon_ref = gps_data.get("GPSLongitudeRef", "E")
             if lon:
                 longitude = self._convert_to_degrees(lon)
+                if math.isnan(longitude) or longitude == 0.0:
+                    return None
                 if lon_ref == "W":
                     longitude = -longitude
             else:
@@ -157,16 +210,43 @@ class ExifService:
             )
 
             if location:
-                # 주소에서 간결한 장소명 추출
+                # 주소에서 의미 있는 장소명 추출
                 address = location.raw.get("address", {})
-                place_name = (
-                    address.get("amenity")
-                    or address.get("building")
-                    or address.get("road")
-                    or address.get("suburb")
-                    or address.get("city")
-                    or location.address
+                
+                # 디버그: 전체 주소 출력
+                print(f"🔍 Nominatim 주소: {address}")
+                
+                # 1순위: 공원, 관광지, 유명 장소
+                landmark = (
+                    address.get("leisure")       # 공원, 놀이터
+                    or address.get("tourism")    # 관광지
+                    or address.get("amenity")    # 편의시설 (카페, 학교 등)
                 )
+                
+                # 2순위: 동네 이름
+                neighbourhood = (
+                    address.get("neighbourhood")  # 동네
+                    or address.get("quarter")     # 지역구
+                    or address.get("suburb")      # 행정동
+                )
+                
+                # 3순위: 시/구
+                city = (
+                    address.get("city")
+                    or address.get("county")
+                    or address.get("town")
+                )
+                
+                # 조합: "동네" 또는 "랜드마크" (단독 도로명 방지)
+                if landmark:
+                    place_name = landmark
+                elif neighbourhood:
+                    place_name = neighbourhood
+                elif city:
+                    place_name = city
+                else:
+                    place_name = address.get("road") or location.address
+                
                 return place_name
 
         except Exception as e:

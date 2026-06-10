@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/photo_provider.dart';
 import '../providers/sync_provider.dart';
-import 'map_screen.dart';
+import '../providers/transfer_provider.dart';
+import '../services/api_service.dart';
+import 'transfer_screen.dart';
 import 'gallery_screen.dart';
-import 'people_screen.dart';
 import 'settings_screen.dart';
 
-/// 메인 홈 화면 (하단 탭 네비게이션)
+/// 메인 홈 화면 (하단 3탭 네비게이션)
+/// 전송 / 백업 갤러리 / 설정
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -19,9 +21,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
   final _screens = const [
-    MapScreen(),
+    TransferScreen(),
     GalleryScreen(),
-    PeopleScreen(),
     SettingsScreen(),
   ];
 
@@ -32,12 +33,24 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _initData() async {
+    // 저장된 서버 URL과 토큰 로드
+    await apiService.loadServerUrl();
+    await apiService.loadToken();
+
+    if (!mounted) return;
+
+    // TransferProvider 초기화 (전송 표시 복원)
+    final transferProvider = context.read<TransferProvider>();
+    await transferProvider.initialize();
+
+    // 로컬 DB에서 기존 데이터 먼저 로드
     final photoProvider = context.read<PhotoProvider>();
     await photoProvider.loadFromLocal();
 
     // 서버 연결 시도
     final syncProvider = context.read<SyncProvider>();
     await syncProvider.checkServerStatus();
+
     if (syncProvider.isServerOnline) {
       await syncProvider.sync(photoProvider);
     }
@@ -57,12 +70,19 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildBottomBar() {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF12121A),
+        color: Colors.white,
         border: Border(
           top: BorderSide(
-            color: Colors.white.withValues(alpha: 0.06),
+            color: Colors.black.withValues(alpha: 0.06),
           ),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
+        ],
       ),
       child: SafeArea(
         child: Padding(
@@ -70,10 +90,9 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _navItem(0, Icons.map_outlined, Icons.map, '지도'),
-              _navItem(1, Icons.photo_library_outlined, Icons.photo_library, '갤러리'),
-              _navItem(2, Icons.people_outline, Icons.people, '인물'),
-              _navItem(3, Icons.settings_outlined, Icons.settings, '설정'),
+              _navItem(0, Icons.photo_library_outlined, Icons.photo_library, '갤러리'),
+              _navItem(1, Icons.cloud_done_outlined, Icons.cloud_done, '백업'),
+              _navItem(2, Icons.settings_outlined, Icons.settings, '설정'),
             ],
           ),
         ),
@@ -87,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: () => setState(() => _currentIndex = index),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(
           color: isActive
               ? const Color(0xFF7C6AEF).withValues(alpha: 0.15)
@@ -101,7 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
               isActive ? activeIcon : icon,
               color: isActive
                   ? const Color(0xFF7C6AEF)
-                  : const Color(0xFF5C5A6E),
+                  : const Color(0xFF9E9EB8),
               size: 24,
             ),
             const SizedBox(height: 4),

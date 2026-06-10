@@ -27,13 +27,13 @@ class Settings(BaseSettings):
 
     # === 저장소 경로 (라즈베리파이 이식 대비: 환경변수로 변경 가능) ===
     # Windows: "X:/" | Linux/RPi: "/mnt/usb"
-    EXTERNAL_DRIVE_PATH: str = "X:/"
-    # 외장하드 미연결 시 임시 버퍼
-    TEMP_BUFFER_PATH: str = str(Path.home() / "PhotoBuffer" / "temp")
+    EXTERNAL_DRIVE_PATH: str = "D:/가족사진"
+    # 사진 임시 저장 (외장하드 연결 시 자동 이동)
+    TEMP_BUFFER_PATH: str = str(Path.home() / "Desktop" / "사진모음집")
     # 서버 내부 데이터 (DB, 썸네일 등)
-    DATA_DIR: str = str(Path.home() / "PhotoBuffer" / "data")
+    DATA_DIR: str = str(Path.home() / "Desktop" / "사진모음집" / "data")
     # 얼굴 인식 학습 데이터
-    FACE_DATA_DIR: str = str(Path.home() / "PhotoBuffer" / "faces")
+    FACE_DATA_DIR: str = str(Path.home() / "Desktop" / "사진모음집" / "faces")
 
     # === 썸네일 설정 ===
     THUMBNAIL_WIDTH: int = 320
@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     # === Nominatim (100% 무료 지오코딩) ===
     NOMINATIM_USER_AGENT: str = "family-photo-archive/1.0"
     NOMINATIM_RATE_LIMIT: float = 1.0  # 초당 최대 1요청 (정책 준수)
+
 
     # === 카카오 로컬 API (100% 무료, 일 10만 건) ===
     # https://developers.kakao.com 에서 무료 앱 등록 후 REST API 키 입력

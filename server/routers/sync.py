@@ -28,7 +28,6 @@ router = APIRouter(prefix="/api", tags=["동기화 & 시스템"])
 @router.get("/sync", response_model=SyncResponse)
 async def sync_data(
     last_sync_at: str | None = None,
-    current_user: dict = Depends(get_current_user),
 ):
     """
     전체 데이터 동기화 (앱 → 서버)
@@ -37,6 +36,19 @@ async def sync_data(
     - 앱은 이 데이터로 로컬 DB를 업데이트
     """
     from datetime import datetime, timezone
+    from pathlib import Path
+
+    # 파일이 삭제된 레코드 자동 정리
+    all_photos_check = await db.fetch_all("SELECT id, buffer_path, original_path FROM photos")
+    for p in all_photos_check:
+        buffer_exists = Path(p["buffer_path"]).exists() if p["buffer_path"] else False
+        original_exists = Path(p["original_path"]).exists() if p["original_path"] else False
+        if not buffer_exists and not original_exists:
+            await db.execute("DELETE FROM photo_persons WHERE photo_id = ?", (p["id"],))
+            await db.execute("DELETE FROM photo_places WHERE photo_id = ?", (p["id"],))
+            await db.execute("DELETE FROM buffer_queue WHERE photo_id = ?", (p["id"],))
+            await db.execute("DELETE FROM photos WHERE id = ?", (p["id"],))
+            print(f"🧹 파일 없는 레코드 정리: {p['id'][:16]}...")
 
     # 사진 메타데이터
     if last_sync_at:
@@ -117,7 +129,6 @@ async def sync_data(
 async def search_places(
     q: str,
     limit: int = 5,
-    current_user: dict = Depends(get_current_user),
 ):
     """
     장소 검색 (카카오 로컬 API 우선 → Nominatim 보조)
@@ -157,7 +168,7 @@ async def search_places(
 
 
 @router.get("/places/search/usage")
-async def place_search_usage(current_user: dict = Depends(get_current_user)):
+async def place_search_usage():
     """카카오 API 일일 사용량 확인"""
     from services.kakao_service import kakao_service
     return await kakao_service.get_daily_usage()
@@ -168,7 +179,6 @@ async def place_search_usage(current_user: dict = Depends(get_current_user)):
 @router.post("/persons", response_model=PersonResponse)
 async def create_person(
     data: PersonCreate,
-    current_user: dict = Depends(get_current_user),
 ):
     """인물 등록"""
     cursor = await db.execute(
@@ -179,7 +189,7 @@ async def create_person(
 
 
 @router.get("/persons", response_model=list[PersonResponse])
-async def list_persons(current_user: dict = Depends(get_current_user)):
+async def list_persons():
     """인물 목록"""
     persons = await db.fetch_all("SELECT * FROM persons ORDER BY name")
     return [
@@ -197,7 +207,6 @@ async def list_persons(current_user: dict = Depends(get_current_user)):
 async def register_face(
     person_id: int,
     file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user),
 ):
     """인물 얼굴 등록 (기준 사진 업로드)"""
     person = await db.fetch_one("SELECT id FROM persons WHERE id = ?", (person_id,))
@@ -224,7 +233,7 @@ async def delete_person(person_id: int, admin: dict = Depends(require_admin)):
 # === 시스템 상태 ===
 
 @router.get("/status", response_model=SystemStatus)
-async def system_status(current_user: dict = Depends(get_current_user)):
+async def system_status():
     """시스템 상태 확인"""
     total_photos = await db.fetch_one("SELECT COUNT(*) as cnt FROM photos")
     total_persons = await db.fetch_one("SELECT COUNT(*) as cnt FROM persons")

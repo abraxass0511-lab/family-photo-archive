@@ -1,21 +1,21 @@
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/photo_model.dart';
 
 /// 서버 API 통신 서비스
 /// - JWT 인증 기반
-/// - 사진 업로드, 동기화, 장소 검색
+/// - 사진 업로드 (진행률 콜백 지원)
+/// - 동기화, 장소 검색, 즐겨찾기
 class ApiService {
   late Dio _dio;
   String? _token;
-  String _baseUrl = 'http://192.168.0.1:8000'; // 로컬 네트워크 서버
+  String _baseUrl = 'http://192.168.45.164:8000'; // 로컬 네트워크 서버
 
   ApiService() {
     _dio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 30),
-      sendTimeout: const Duration(seconds: 60),
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 300), // 대용량 동영상 다운로드 대비
+      sendTimeout: const Duration(seconds: 300), // 대용량 동영상 업로드 대비
     ));
 
     _dio.interceptors.add(InterceptorsWrapper(
@@ -50,10 +50,13 @@ class ApiService {
     _dio.options.baseUrl = _baseUrl;
   }
 
+  /// 현재 서버 주소
+  String get baseUrl => _baseUrl;
+
   /// 서버 연결 확인
   Future<bool> isServerReachable() async {
     try {
-      final resp = await _dio.get('$_baseUrl/api/status');
+      final resp = await _dio.get('$_baseUrl/health');
       return resp.statusCode == 200;
     } catch (_) {
       return false;
@@ -79,6 +82,13 @@ class ApiService {
       print('로그인 실패: $e');
     }
     return false;
+  }
+
+  /// 로그아웃
+  Future<void> logout() async {
+    _token = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
   }
 
   /// 저장된 토큰 불러오기
@@ -110,21 +120,45 @@ class ApiService {
 
   // === 사진 업로드 ===
 
-  /// 사진 파일 업로드 (폰 → 서버)
-  Future<Map<String, dynamic>?> uploadPhoto(String filePath) async {
+  /// 사진 파일 업로드 (진행률 콜백 지원)
+  /// latitude/longitude: 앱에서 가져온 위치 데이터 (EXIF에 없을 경우 서버가 사용)
+  Future<Map<String, dynamic>?> uploadPhotoWithProgress(
+    String filePath, {
+    void Function(int sent, int total)? onProgress,
+    double? latitude,
+    double? longitude,
+  }) async {
     try {
-      final formData = FormData.fromMap({
+      final map = <String, dynamic>{
         'file': await MultipartFile.fromFile(filePath),
-      });
-      final resp = await _dio.post('$_baseUrl/api/photos/upload',
-          data: formData);
+      };
+      if (latitude != null && longitude != null) {
+        map['latitude'] = latitude.toString();
+        map['longitude'] = longitude.toString();
+      }
+      final formData = FormData.fromMap(map);
+      final resp = await _dio.post(
+        '$_baseUrl/api/photos/upload',
+        data: formData,
+        onSendProgress: onProgress,
+      );
       if (resp.statusCode == 200) {
         return resp.data;
       }
-    } catch (e) {
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 409) {
+        // 이미 전송된 파일 → 에러를 throw해서 duplicate 처리
+        throw Exception('409: 이미 전송된 파일입니다');
+      }
       print('업로드 실패: $e');
+      rethrow;
     }
     return null;
+  }
+
+  /// 사진 파일 업로드 (기본)
+  Future<Map<String, dynamic>?> uploadPhoto(String filePath, {double? latitude, double? longitude}) async {
+    return uploadPhotoWithProgress(filePath, latitude: latitude, longitude: longitude);
   }
 
   // === 장소 검색 ===
@@ -171,11 +205,50 @@ class ApiService {
     }
   }
 
+  // === 서버 상태 ===
+
+  /// 서버 상세 상태 조회
+  Future<Map<String, dynamic>?> getServerStatus() async {
+    try {
+      final resp = await _dio.get('$_baseUrl/api/status');
+      if (resp.statusCode == 200) {
+        return resp.data;
+      }
+    } catch (e) {
+      print('상태 조회 실패: $e');
+    }
+    return null;
+  }
+
   // === 썸네일 다운로드 ===
 
   /// 썸네일 URL 생성
   String getThumbnailUrl(String photoId) {
-    return '$_baseUrl/api/thumbnails/$photoId';
+    return '$_baseUrl/api/photos/thumbnail/$photoId';
+  }
+
+  /// 원본 파일 URL (사진/동영상)
+  String getOriginalFileUrl(String photoId) {
+    return '$_baseUrl/api/photos/file/$photoId';
+  }
+
+  // === 비밀번호 변경 ===
+
+  /// 비밀번호 변경
+  Future<bool> changePassword(String currentPassword, String newPassword) async {
+    try {
+      final resp = await _dio.put(
+        '$_baseUrl/api/auth/password',
+        data: {
+          'current_password': currentPassword,
+          'new_password': newPassword,
+        },
+      );
+      return resp.statusCode == 200;
+    } catch (e) {
+      print('비밀번호 변경 실패: $e');
+      return false;
+    }
   }
 }
 

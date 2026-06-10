@@ -74,7 +74,8 @@ class PhotoProvider extends ChangeNotifier {
             .toList() ??
         [];
 
-    // 로컬 DB에 일괄 저장
+    // 로컬 DB 전체 교체 (삭제된 항목 반영)
+    await LocalDatabase.clearPhotos();
     await LocalDatabase.bulkUpsertPhotos(photoList);
     _photos = await LocalDatabase.getAllPhotos();
 

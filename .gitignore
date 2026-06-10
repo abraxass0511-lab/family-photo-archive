@@ -41,12 +41,15 @@ server/.env
 # === 데이터 & 빌드 ===
 *.db
 *.sqlite
+*.apk
 data/
 server/data/
 web/data/
 dist/
 build/
 *.exe
+pubspec.lock
+sync_debug.json
 
 # === 썸네일 & 미디어 ===
 thumbnails/

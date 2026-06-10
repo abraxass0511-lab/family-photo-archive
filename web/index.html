@@ -3,200 +3,515 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="가족 추억 보관 상자 - 프라이빗 가족 사진 아카이브">
-    <title>가족 추억 보관 상자</title>
+    <meta name="description" content="사진 및 동영상 전송기">
+    <title>사진 및 동영상 전송기</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Leaflet.js (OpenStreetMap, 100% 무료) -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-          crossorigin="anonymous" />
-    <!-- Leaflet MarkerCluster -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
-    <link rel="stylesheet" href="css/style.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Noto Sans KR', -apple-system, sans-serif;
+            background: #f5f5f7;
+            color: #1d1d1f;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 16px;
+        }
+
+        /* 헤더 */
+        .header {
+            text-align: center;
+            padding: 48px 0 28px;
+            width: 100%;
+            max-width: 520px;
+        }
+        .header h1 {
+            font-size: 22px;
+            font-weight: 700;
+            color: #7c3aed;
+            margin-bottom: 4px;
+        }
+        .header p {
+            font-size: 13px;
+            color: #86868b;
+        }
+
+        /* 카드 */
+        .card {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 28px 24px;
+            width: 100%;
+            max-width: 520px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            margin-bottom: 16px;
+        }
+
+        /* 업로드 영역 */
+        .dropzone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #d1d5db;
+            border-radius: 16px;
+            padding: 44px 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #fafafa;
+        }
+        .dropzone:hover {
+            border-color: #7c3aed;
+            background: #f5f0ff;
+        }
+        .dropzone.dragover {
+            border-color: #7c3aed;
+            background: #ede9fe;
+        }
+        .dropzone-icon {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 14px;
+            color: #9ca3af;
+        }
+        .dropzone-title {
+            font-size: 15px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+        .dropzone-sub {
+            font-size: 12px;
+            color: #9ca3af;
+        }
+        .dropzone input[type="file"] { display: none; }
+
+        /* 전송 버튼 */
+        .send-btn {
+            display: none;
+            width: 100%;
+            padding: 14px;
+            margin-top: 20px;
+            background: linear-gradient(135deg, #7c3aed, #6366f1);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .send-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(124, 58, 237, 0.3);
+        }
+        .send-btn:active { transform: translateY(0); }
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 선택된 파일 미리보기 */
+        .selected-files {
+            display: none;
+            margin-top: 16px;
+        }
+        .selected-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .selected-header span {
+            font-size: 13px;
+            font-weight: 500;
+            color: #6b7280;
+        }
+        .selected-header button {
+            font-size: 12px;
+            color: #ef4444;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .file-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 13px;
+        }
+        .file-item:last-child { border-bottom: none; }
+        .file-icon { font-size: 18px; flex-shrink: 0; }
+        .file-name {
+            flex: 1;
+            color: #374151;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .file-size {
+            font-size: 11px;
+            color: #9ca3af;
+            flex-shrink: 0;
+        }
+
+        /* 진행 상태 */
+        .progress-section {
+            display: none;
+            margin-top: 20px;
+        }
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .progress-header span { font-size: 13px; color: #6b7280; }
+        .progress-count { color: #7c3aed !important; font-weight: 600; }
+        .progress-bar-bg {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #7c3aed, #6366f1);
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+
+        /* 결과 */
+        .results {
+            display: none;
+            margin-top: 16px;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .result-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 13px;
+        }
+        .result-item:last-child { border-bottom: none; }
+        .result-icon { font-size: 16px; flex-shrink: 0; }
+        .result-name {
+            flex: 1;
+            color: #374151;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .result-status { font-size: 11px; color: #9ca3af; flex-shrink: 0; }
+        .result-success .result-status { color: #059669; }
+        .result-skip .result-status { color: #d97706; }
+        .result-fail .result-status { color: #dc2626; }
+
+        /* 저장 위치 */
+        .storage-card {
+            background: white;
+            border-radius: 16px;
+            padding: 18px 20px;
+            width: 100%;
+            max-width: 520px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            margin-bottom: 32px;
+        }
+        .storage-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #6b7280;
+            margin-bottom: 10px;
+        }
+        .storage-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 5px 0;
+            font-size: 12px;
+        }
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .dot-on { background: #10b981; }
+        .dot-off { background: #ef4444; }
+        .storage-label { color: #374151; flex: 1; }
+        .storage-path { color: #9ca3af; font-size: 11px; }
+
+        /* 스크롤바 */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+
+        @media (max-width: 480px) {
+            .header { padding: 32px 0 20px; }
+            .header h1 { font-size: 20px; }
+            .card { padding: 20px 16px; }
+            .dropzone { padding: 36px 16px; }
+        }
+    </style>
 </head>
 <body>
-    <!-- ===================== 암호 잠금 화면 ===================== -->
-    <div id="auth-screen" class="screen active">
-        <div class="auth-container">
-            <div class="auth-glow"></div>
-            <div class="auth-card">
-                <div class="auth-icon">
-                    <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-                        <rect x="16" y="28" width="32" height="24" rx="4" stroke="currentColor" stroke-width="2.5"/>
-                        <path d="M24 28V20C24 15.5817 27.5817 12 32 12C36.4183 12 40 15.5817 40 20V28" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-                        <circle cx="32" cy="38" r="3" fill="currentColor"/>
-                        <line x1="32" y1="41" x2="32" y2="46" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-                    </svg>
-                </div>
-                <h1 class="auth-title">가족 추억 보관 상자</h1>
-                <p class="auth-subtitle">소중한 추억을 안전하게 보관합니다</p>
-                <form id="auth-form" onsubmit="return handleLogin(event)">
-                    <div class="input-group">
-                        <input type="password" id="password-input" placeholder="가족 비밀번호를 입력하세요"
-                               autocomplete="off" required minlength="4">
-                        <button type="submit" id="login-btn" class="btn-primary">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M5 12h14M12 5l7 7-7 7"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <p id="auth-error" class="error-msg hidden">비밀번호가 올바르지 않습니다</p>
-                </form>
-                <div class="auth-footer">
-                    <span class="lock-icon">🔒</span> 클라이언트 암호화 보호
-                </div>
+    <div class="header">
+        <h1>📱 사진 및 동영상 전송기</h1>
+        <p>핸드폰 사진·동영상을 노트북으로 전송합니다</p>
+    </div>
+
+    <div class="card">
+        <!-- 업로드 영역 -->
+        <label class="dropzone" id="dropzone">
+            <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <div class="dropzone-title">터치하여 파일 선택</div>
+            <div class="dropzone-sub">사진·동영상 함께 선택 가능 · 여러 개 OK</div>
+            <input type="file" id="file-input" multiple accept="image/*,video/*" onchange="onFilesSelected(event)">
+        </label>
+
+        <!-- 선택된 파일 목록 -->
+        <div class="selected-files" id="selected-files">
+            <div class="selected-header">
+                <span id="selected-count">0개 선택됨</span>
+                <button onclick="clearFiles()">전체 취소</button>
             </div>
+            <div class="file-list" id="file-list"></div>
+        </div>
+
+        <!-- 전송 버튼 -->
+        <button class="send-btn" id="send-btn" onclick="startUpload()">📤 전송하기</button>
+
+        <!-- 진행 상태 -->
+        <div class="progress-section" id="progress-section">
+            <div class="progress-header">
+                <span id="progress-status">전송 준비 중...</span>
+                <span class="progress-count" id="progress-count">0/0</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+        </div>
+
+        <!-- 결과 -->
+        <div class="results" id="results"></div>
+    </div>
+
+    <!-- 저장 위치 -->
+    <div class="storage-card">
+        <div class="storage-title">📂 저장 위치</div>
+        <div class="storage-row">
+            <div class="dot dot-on"></div>
+            <span class="storage-label">노트북 저장소</span>
+            <span class="storage-path">바탕화면\사진모음집</span>
+        </div>
+        <div class="storage-row">
+            <div class="dot dot-off" id="drive-dot"></div>
+            <span class="storage-label">외장하드 (X:)</span>
+            <span class="storage-path" id="drive-path">미연결 — 연결 시 자동 이관</span>
         </div>
     </div>
 
-    <!-- ===================== 메인 앱 화면 ===================== -->
-    <div id="app-screen" class="screen">
-        <!-- 헤더 -->
-        <header class="app-header">
-            <div class="header-left">
-                <h1 class="header-title">📸 가족 추억 보관 상자</h1>
-            </div>
-            <nav class="header-nav">
-                <button class="nav-btn active" data-view="map" onclick="switchView('map')">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
-                        <line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
-                    </svg>
-                    지도
-                </button>
-                <button class="nav-btn" data-view="gallery" onclick="switchView('gallery')">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-                        <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
-                    </svg>
-                    갤러리
-                </button>
-                <button class="nav-btn" data-view="people" onclick="switchView('people')">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                        <circle cx="9" cy="7" r="4"/>
-                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                    </svg>
-                    인물
-                </button>
-            </nav>
-            <div class="header-right">
-                <button class="icon-btn" onclick="toggleFavoritesFilter()" id="fav-filter-btn" title="즐겨찾기">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                    </svg>
-                </button>
-                <button class="icon-btn danger" onclick="handleLogout()" title="로그아웃">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                        <polyline points="16 17 21 12 16 7"/>
-                        <line x1="21" y1="12" x2="9" y2="12"/>
-                    </svg>
-                </button>
-            </div>
-        </header>
+    <script>
+        let selectedFiles = [];
+        let authToken = null;
 
-        <!-- 지도 뷰 -->
-        <div id="map-view" class="view active">
-            <div id="map-container"></div>
-            <!-- 하단 갤러리 슬라이드업 -->
-            <div id="bottom-gallery" class="bottom-gallery hidden">
-                <div class="gallery-handle" onclick="toggleBottomGallery()">
-                    <div class="handle-bar"></div>
-                </div>
-                <div class="gallery-header">
-                    <h3 id="gallery-place-name">장소명</h3>
-                    <span id="gallery-photo-count" class="badge">0장</span>
-                </div>
-                <div id="gallery-scroll" class="gallery-scroll"></div>
-            </div>
-        </div>
+        // === 파일 선택 ===
+        function onFilesSelected(event) {
+            const files = Array.from(event.target.files);
+            if (!files.length) return;
+            selectedFiles = files;
+            showSelectedFiles();
+        }
 
-        <!-- 갤러리 뷰 -->
-        <div id="gallery-view" class="view">
-            <div class="gallery-toolbar">
-                <div class="search-box">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
-                    <input type="text" id="search-input" placeholder="장소, 날짜로 검색..." oninput="filterPhotos(this.value)">
-                </div>
-                <div class="sort-controls">
-                    <select id="sort-select" onchange="sortPhotos(this.value)">
-                        <option value="date-desc">최신순</option>
-                        <option value="date-asc">오래된순</option>
-                        <option value="place">장소별</option>
-                    </select>
-                    <button class="select-mode-btn" onclick="toggleSelectMode()">선택</button>
-                </div>
-            </div>
-            <div id="photo-grid" class="photo-grid"></div>
-        </div>
+        function showSelectedFiles() {
+            const section = document.getElementById('selected-files');
+            const list = document.getElementById('file-list');
+            const count = document.getElementById('selected-count');
+            const btn = document.getElementById('send-btn');
 
-        <!-- 인물 뷰 -->
-        <div id="people-view" class="view">
-            <div id="people-grid" class="people-grid"></div>
-            <div id="person-photos" class="person-photos hidden">
-                <button class="back-btn" onclick="showPeopleGrid()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
-                    </svg>
-                    전체 인물
-                </button>
-                <h2 id="person-name" class="person-view-title"></h2>
-                <div id="person-photo-grid" class="photo-grid"></div>
-            </div>
-        </div>
+            section.style.display = 'block';
+            btn.style.display = 'block';
 
-        <!-- 사진 상세 모달 -->
-        <div id="photo-modal" class="modal hidden">
-            <div class="modal-overlay" onclick="closeModal()"></div>
-            <div class="modal-content">
-                <button class="modal-close" onclick="closeModal()">&times;</button>
-                <img id="modal-image" src="" alt="사진" class="modal-image">
-                <div class="modal-info">
-                    <div class="modal-meta">
-                        <p id="modal-date" class="meta-item">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-                                <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                            </svg>
-                            <span></span>
-                        </p>
-                        <p id="modal-place" class="meta-item">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-                            </svg>
-                            <span></span>
-                        </p>
-                        <p id="modal-persons" class="meta-item">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-                            </svg>
-                            <span></span>
-                        </p>
-                    </div>
-                    <button id="modal-fav-btn" class="fav-btn" onclick="toggleFavorite()">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                        </svg>
-                    </button>
+            count.textContent = `${selectedFiles.length}개 선택됨`;
+            list.innerHTML = selectedFiles.map(f => `
+                <div class="file-item">
+                    <span class="file-icon">${f.type.startsWith('video/') ? '🎬' : '🖼️'}</span>
+                    <span class="file-name">${esc(f.name)}</span>
+                    <span class="file-size">${formatSize(f.size)}</span>
                 </div>
-            </div>
-        </div>
-    </div>
+            `).join('');
+        }
 
-    <!-- Scripts -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-            crossorigin="anonymous"></script>
-    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/app.js"></script>
-    <script src="js/map.js"></script>
-    <script src="js/gallery.js"></script>
+        function clearFiles() {
+            selectedFiles = [];
+            document.getElementById('file-input').value = '';
+            document.getElementById('selected-files').style.display = 'none';
+            document.getElementById('send-btn').style.display = 'none';
+            document.getElementById('progress-section').style.display = 'none';
+            document.getElementById('results').style.display = 'none';
+        }
+
+        // === 전송 시작 ===
+        async function startUpload() {
+            if (!selectedFiles.length) return;
+
+            const token = await getToken();
+            if (!token) { alert('서버 연결 실패. 서버가 실행 중인지 확인하세요.'); return; }
+
+            const btn = document.getElementById('send-btn');
+            btn.disabled = true;
+            btn.textContent = '전송 중...';
+
+            const section = document.getElementById('progress-section');
+            const statusEl = document.getElementById('progress-status');
+            const countEl = document.getElementById('progress-count');
+            const barEl = document.getElementById('progress-bar');
+            const resultsEl = document.getElementById('results');
+
+            section.style.display = 'block';
+            resultsEl.style.display = 'block';
+            resultsEl.innerHTML = '';
+            barEl.style.width = '0%';
+
+            let done = 0, ok = 0, skip = 0;
+            const total = selectedFiles.length;
+
+            for (const file of selectedFiles) {
+                statusEl.textContent = `전송 중: ${file.name}`;
+                countEl.textContent = `${done}/${total}`;
+
+                try {
+                    const form = new FormData();
+                    form.append('file', file);
+
+                    const resp = await fetch('/api/photos/upload', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        body: form,
+                    });
+
+                    done++;
+                    barEl.style.width = `${Math.round(done / total * 100)}%`;
+                    countEl.textContent = `${done}/${total}`;
+
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        ok++;
+                        addResult('✅', data.filename, '전송 완료', 'result-success');
+                    } else if (resp.status === 409) {
+                        skip++;
+                        addResult('⏭️', file.name, '이미 전송됨', 'result-skip');
+                    } else {
+                        const err = await resp.json().catch(() => ({}));
+                        addResult('❌', file.name, err.detail || '실패', 'result-fail');
+                    }
+                } catch (e) {
+                    done++;
+                    addResult('❌', file.name, '네트워크 오류', 'result-fail');
+                }
+            }
+
+            let msg = `✅ ${ok}개 전송 완료`;
+            if (skip) msg += ` · ⏭️ ${skip}개 건너뜀`;
+            statusEl.textContent = msg;
+            barEl.style.width = '100%';
+
+            btn.disabled = false;
+            btn.textContent = '📤 전송하기';
+            selectedFiles = [];
+            document.getElementById('file-input').value = '';
+            document.getElementById('selected-files').style.display = 'none';
+            btn.style.display = 'none';
+        }
+
+        function addResult(icon, name, status, cls) {
+            const el = document.getElementById('results');
+            el.innerHTML += `
+                <div class="result-item ${cls}">
+                    <span class="result-icon">${icon}</span>
+                    <span class="result-name">${esc(name)}</span>
+                    <span class="result-status">${status}</span>
+                </div>`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        // === 인증 ===
+        async function getToken() {
+            if (authToken) return authToken;
+            try {
+                const resp = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: 'admin', password: 'Admin1234!' }),
+                });
+                if (resp.ok) { authToken = (await resp.json()).access_token; return authToken; }
+            } catch (e) {}
+            return null;
+        }
+
+        // === 유틸 ===
+        function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + 'B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(0) + 'KB';
+            if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + 'MB';
+            return (bytes / 1073741824).toFixed(1) + 'GB';
+        }
+
+        // === 드래그 앤 드롭 ===
+        const dz = document.getElementById('dropzone');
+        dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+        dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+        dz.addEventListener('drop', e => {
+            e.preventDefault(); dz.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                selectedFiles = Array.from(e.dataTransfer.files);
+                showSelectedFiles();
+            }
+        });
+
+        // === 외장하드 상태 ===
+        async function checkDrive() {
+            try {
+                const r = await fetch('/health');
+                if (r.ok) {
+                    const d = await r.json();
+                    const dot = document.getElementById('drive-dot');
+                    const path = document.getElementById('drive-path');
+                    if (d.external_drive) {
+                        dot.classList.replace('dot-off', 'dot-on');
+                        let txt = '연결됨 — 자동 이관 활성';
+                        if (d.buffer_pending > 0) txt += ` (대기: ${d.buffer_pending}개)`;
+                        path.textContent = txt;
+                    } else {
+                        let txt = '미연결 — 연결 시 자동 이관';
+                        if (d.buffer_pending > 0) txt += ` (대기: ${d.buffer_pending}개)`;
+                        path.textContent = txt;
+                    }
+                }
+            } catch (e) {}
+        }
+        checkDrive();
+        setInterval(checkDrive, 10000);
+    </script>
 </body>
 </html>

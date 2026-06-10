@@ -121,6 +121,12 @@ class LocalDatabase {
     );
   }
 
+  /// 사진 전체 삭제 (전체 동기화 전 호출)
+  static Future<void> clearPhotos() async {
+    final db = await database;
+    await db.delete('photos');
+  }
+
   /// 사진 일괄 삽입 (동기화)
   static Future<void> bulkUpsertPhotos(List<PhotoModel> photos) async {
     final db = await database;

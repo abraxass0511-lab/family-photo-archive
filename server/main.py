@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from config import settings
 from db.database import db
@@ -112,6 +113,11 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(auth_router)
 app.include_router(upload_router)
 app.include_router(sync_router)
+
+# === 정적 파일 서빙 (웹 프론트엔드) ===
+web_dir = Path(__file__).parent.parent / "web"
+if web_dir.exists():
+    app.mount("/web", StaticFiles(directory=str(web_dir), html=True), name="web")
 
 
 # === 헬스체크 ===

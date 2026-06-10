@@ -117,7 +117,7 @@ class PhotoUploadResponse(BaseModel):
     """사진 업로드 응답"""
     photo_id: str
     filename: str
-    thumbnail_path: str
+    thumbnail_path: str | None = None
     storage_status: str  # "external_drive" | "buffer" | "failed"
     extracted_metadata: dict
     detected_faces: list[str]

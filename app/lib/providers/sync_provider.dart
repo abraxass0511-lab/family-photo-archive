@@ -48,8 +48,8 @@ class SyncProvider extends ChangeNotifier {
       _syncStatus = '데이터 다운로드 중...';
       notifyListeners();
 
-      final lastSync = await LocalDatabase.getLastSyncTime();
-      final data = await apiService.syncData(lastSyncAt: lastSync);
+      // 항상 전체 동기화 (삭제된 항목도 반영)
+      final data = await apiService.syncData(lastSyncAt: null);
 
       if (data != null) {
         await photoProvider.applySyncData(data);
@@ -84,7 +84,7 @@ class SyncProvider extends ChangeNotifier {
 
     final favoriteChanges = queue
         .where((q) => q['action'] == 'toggle_favorite')
-        .map((q) => {
+        .map((q) => <String, dynamic>{
               'photo_id': q['photo_id'],
               'is_favorite': q['data'] == 'true',
             })

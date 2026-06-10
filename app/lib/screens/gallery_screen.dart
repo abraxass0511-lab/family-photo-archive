@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:video_player/video_player.dart';
 import '../providers/photo_provider.dart';
+import '../providers/sync_provider.dart';
 import '../models/photo_model.dart';
+import '../services/api_service.dart';
 
-/// 갤러리 화면 (사진 그리드 + 다중선택 + 붉은색 삭제 바)
+/// 백업 갤러리 화면 — 서버에 전송된 사진 목록
+/// 서버 썸네일을 CachedNetworkImage로 표시
 class GalleryScreen extends StatefulWidget {
   const GalleryScreen({super.key});
 
@@ -17,35 +22,37 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<PhotoProvider>(
-      builder: (context, provider, _) {
+    return Consumer2<PhotoProvider, SyncProvider>(
+      builder: (context, provider, syncProvider, _) {
         List<PhotoModel> photos = _showFavoritesOnly
             ? provider.favoritePhotos
             : provider.photos;
 
-        // 검색 필터
+        // 검색 필터 (즐겨찾기 내에서도 검색)
         if (_searchController.text.isNotEmpty) {
-          photos = provider.search(_searchController.text);
+          final q = _searchController.text.toLowerCase();
+          photos = photos.where((p) =>
+            p.filename.toLowerCase().contains(q) ||
+            (p.placeName?.toLowerCase().contains(q) ?? false) ||
+            (p.takenAt?.toLowerCase().contains(q) ?? false) ||
+            p.persons.any((name) => name.toLowerCase().contains(q))
+          ).toList();
         }
 
         return Scaffold(
-          backgroundColor: const Color(0xFF0A0A0F),
+          backgroundColor: const Color(0xFFF5F5F8),
           body: SafeArea(
             child: Column(
               children: [
                 // 툴바
-                _buildToolbar(provider),
+                _buildToolbar(provider, syncProvider),
 
                 // 사진 그리드
                 Expanded(
                   child: photos.isEmpty
-                      ? _buildEmptyState()
+                      ? _buildEmptyState(syncProvider)
                       : _buildPhotoGrid(photos, provider),
                 ),
-
-                // 하단 삭제 바 (선택 모드)
-                if (provider.selectMode && provider.selectedCount > 0)
-                  _buildDeleteBar(provider),
               ],
             ),
           ),
@@ -55,30 +62,78 @@ class _GalleryScreenState extends State<GalleryScreen> {
   }
 
   /// 상단 툴바
-  Widget _buildToolbar(PhotoProvider provider) {
+  Widget _buildToolbar(PhotoProvider provider, SyncProvider syncProvider) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Column(
         children: [
+          // 제목 + 동기화
+          Row(
+            children: [
+              const Text(
+                '백업 갤러리',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1A1A2E),
+                ),
+              ),
+              const Spacer(),
+              // 동기화 버튼
+              GestureDetector(
+                onTap: syncProvider.isSyncing
+                    ? null
+                    : () => syncProvider.sync(provider),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: syncProvider.isSyncing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF4ECDC4),
+                          ),
+                        )
+                      : Icon(
+                          Icons.sync,
+                          size: 18,
+                          color: syncProvider.isServerOnline
+                              ? const Color(0xFF4ECDC4)
+                              : Colors.black26,
+                        ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
           // 검색 바
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
             ),
             child: Row(
               children: [
-                Icon(Icons.search, color: Colors.white.withValues(alpha: 0.3), size: 20),
+                Icon(Icons.search,
+                    color: Colors.black.withValues(alpha: 0.3), size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     controller: _searchController,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    style: const TextStyle(color: Color(0xFF1A1A2E), fontSize: 14),
                     decoration: InputDecoration(
-                      hintText: '사진, 장소, 인물 검색...',
-                      hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+                      hintText: '파일명, 장소 검색...',
+                      hintStyle: TextStyle(
+                          color: Colors.black.withValues(alpha: 0.3)),
                       border: InputBorder.none,
                       isDense: true,
                     ),
@@ -94,53 +149,19 @@ class _GalleryScreenState extends State<GalleryScreen> {
           // 필터 버튼
           Row(
             children: [
-              // 즐겨찾기 필터
               _filterChip(
                 icon: Icons.favorite,
                 label: '즐겨찾기',
                 isActive: _showFavoritesOnly,
-                onTap: () => setState(() => _showFavoritesOnly = !_showFavoritesOnly),
+                onTap: () =>
+                    setState(() => _showFavoritesOnly = !_showFavoritesOnly),
               ),
-
               const SizedBox(width: 8),
-
-              // 사진 수 표시
               Text(
-                '${provider.photos.length}장',
+                '${provider.photos.length}장 백업됨',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.4),
+                  color: Colors.black.withValues(alpha: 0.4),
                   fontSize: 12,
-                ),
-              ),
-
-              const Spacer(),
-
-              // 선택 모드 버튼
-              GestureDetector(
-                onTap: () => provider.toggleSelectMode(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: provider.selectMode
-                        ? const Color(0xFF7C6AEF).withValues(alpha: 0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: provider.selectMode
-                          ? const Color(0xFF7C6AEF).withValues(alpha: 0.3)
-                          : Colors.white.withValues(alpha: 0.1),
-                    ),
-                  ),
-                  child: Text(
-                    provider.selectMode ? '취소' : '선택',
-                    style: TextStyle(
-                      color: provider.selectMode
-                          ? const Color(0xFF7C6AEF)
-                          : Colors.white.withValues(alpha: 0.6),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
                 ),
               ),
             ],
@@ -163,12 +184,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
         decoration: BoxDecoration(
           color: isActive
               ? const Color(0xFFFF4D6D).withValues(alpha: 0.15)
-              : Colors.white.withValues(alpha: 0.05),
+              : Colors.black.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isActive
                 ? const Color(0xFFFF4D6D).withValues(alpha: 0.3)
-                : Colors.white.withValues(alpha: 0.08),
+                : Colors.black.withValues(alpha: 0.05),
           ),
         ),
         child: Row(
@@ -177,14 +198,14 @@ class _GalleryScreenState extends State<GalleryScreen> {
             Icon(
               icon,
               size: 14,
-              color: isActive ? const Color(0xFFFF4D6D) : Colors.white54,
+              color: isActive ? const Color(0xFFFF4D6D) : Colors.black54,
             ),
             const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
-                color: isActive ? const Color(0xFFFF4D6D) : Colors.white54,
+                color: isActive ? const Color(0xFFFF4D6D) : Colors.black54,
               ),
             ),
           ],
@@ -193,108 +214,141 @@ class _GalleryScreenState extends State<GalleryScreen> {
     );
   }
 
-  /// 사진 그리드
+  /// 사진 그리드 — 날짜별 그룹
   Widget _buildPhotoGrid(List<PhotoModel> photos, PhotoProvider provider) {
-    return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 4,
-        crossAxisSpacing: 4,
-      ),
-      itemCount: photos.length,
-      itemBuilder: (context, index) {
-        final photo = photos[index];
-        final isSelected = provider.selectedIds.contains(photo.id);
+    // 날짜별 그룹핑
+    final grouped = <String, List<PhotoModel>>{};
+    for (final photo in photos) {
+      String key;
+      if (photo.takenAt != null && photo.takenAt!.isNotEmpty) {
+        try {
+          final dt = DateTime.parse(photo.takenAt!);
+          key = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+        } catch (_) {
+          key = '날짜 미상';
+        }
+      } else {
+        key = '날짜 미상';
+      }
+      grouped.putIfAbsent(key, () => []).add(photo);
+    }
+    final dateKeys = grouped.keys.toList();
 
-        return GestureDetector(
-          onTap: () {
-            if (provider.selectMode) {
-              provider.toggleSelection(photo.id);
-            } else {
-              _showPhotoDetail(photo, provider);
-            }
-          },
-          onLongPress: () {
-            if (!provider.selectMode) {
-              provider.toggleSelectMode();
-              provider.toggleSelection(photo.id);
-            }
-          },
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // 사진 카드
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  color: const Color(0xFF2A2A3D),
-                  // 백업 완료: 초록 테두리
-                  border: photo.isBackedUp
-                      ? Border.all(color: const Color(0xFF4ECDC4), width: 2)
-                      : null,
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    photo.isBackedUp ? 8 : 10,
-                  ),
-                  child: photo.thumbnailPath != null
-                      ? Image.asset(photo.thumbnailPath!, fit: BoxFit.cover)
-                      : _buildPlaceholder(photo),
+    return CustomScrollView(
+      slivers: [
+        for (final dateKey in dateKeys) ...[
+          // 날짜 헤더
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
+              child: Text(
+                _formatDateHeader(dateKey),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A2E),
                 ),
               ),
-
-              // 선택 체크박스
-              if (provider.selectMode)
-                Positioned(
-                  top: 6,
-                  left: 6,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isSelected
-                          ? const Color(0xFF7C6AEF)
-                          : Colors.black.withValues(alpha: 0.4),
-                      border: Border.all(
-                        color: isSelected
-                            ? const Color(0xFF7C6AEF)
-                            : Colors.white.withValues(alpha: 0.5),
-                        width: 2,
-                      ),
-                    ),
-                    child: isSelected
-                        ? const Icon(Icons.check, color: Colors.white, size: 14)
-                        : null,
-                  ),
-                ),
-
-              // 선택 오버레이
-              if (isSelected)
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF7C6AEF), width: 3),
-                  ),
-                ),
-
-              // 즐겨찾기 하트
-              if (photo.isFavorite && !provider.selectMode)
-                const Positioned(
-                  top: 6,
-                  right: 6,
-                  child: Text('❤️', style: TextStyle(fontSize: 14)),
-                ),
-            ],
+            ),
           ),
-        );
-      },
+          // 해당 날짜 사진 그리드
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 4,
+                crossAxisSpacing: 4,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final photo = grouped[dateKey]![index];
+                  final isVideoItem = photo.filename.toLowerCase().endsWith('.mp4') ||
+                      photo.filename.toLowerCase().endsWith('.mov') ||
+                      photo.filename.toLowerCase().endsWith('.3gp');
+                  return GestureDetector(
+                    onTap: () => _showPhotoDetail(photo, provider),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            color: const Color(0xFFE8E8F0),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: _buildThumbnail(photo),
+                          ),
+                        ),
+                        // 동영상 재생 아이콘
+                        if (isVideoItem)
+                          Positioned(
+                            bottom: 6,
+                            left: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.play_arrow, color: Colors.white, size: 14),
+                                  SizedBox(width: 2),
+                                  Text('동영상', style: TextStyle(color: Colors.white, fontSize: 10)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        if (photo.isFavorite)
+                          const Positioned(
+                            top: 6,
+                            right: 6,
+                            child: Text('❤️', style: TextStyle(fontSize: 14)),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+                childCount: grouped[dateKey]!.length,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
-  /// 플레이스홀더
+  /// 날짜 헤더 포맷
+  String _formatDateHeader(String dateKey) {
+    if (dateKey == '날짜 미상') return dateKey;
+    try {
+      final dt = DateTime.parse(dateKey);
+      const weekdays = ['월', '화', '수', '목', '금', '토', '일'];
+      final weekday = weekdays[dt.weekday - 1];
+      return '$dateKey ($weekday)';
+    } catch (_) {
+      return dateKey;
+    }
+  }
+
+  /// 썸네일 표시 (서버에서 로드)
+  Widget _buildThumbnail(PhotoModel photo) {
+    // 서버 썸네일 URL
+    final thumbUrl = apiService.getThumbnailUrl(photo.id);
+
+    return CachedNetworkImage(
+      imageUrl: thumbUrl,
+      fit: BoxFit.cover,
+      httpHeaders: const {},
+      placeholder: (context, url) => _buildPlaceholder(photo),
+      errorWidget: (context, url, error) => _buildPlaceholder(photo),
+    );
+  }
+
+  /// 플레이스홀더 (썸네일 로드 실패 시)
   Widget _buildPlaceholder(PhotoModel photo) {
     final colors = [
       const Color(0xFF7C6AEF),
@@ -307,79 +361,25 @@ class _GalleryScreenState extends State<GalleryScreen> {
     return Container(
       color: color,
       child: Center(
-        child: Text(
-          photo.placeName?.substring(0, 1) ?? '📸',
-          style: const TextStyle(fontSize: 32, color: Colors.white),
-        ),
-      ),
-    );
-  }
-
-  /// 하단 붉은색 삭제 바
-  Widget _buildDeleteBar(PhotoProvider provider) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFFFF4D6D), Color(0xFFE63946)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x4DFF4D6D),
-            blurRadius: 20,
-            offset: Offset(0, -4),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // 선택 정보
-            Expanded(
-              child: Row(
-                children: [
-                  const Text(
-                    '📱 폰에서 삭제',
-                    style: TextStyle(color: Colors.white, fontSize: 14),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '${provider.selectedCount}장',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            Text(
+              photo.filename.endsWith('.mp4') ||
+                      photo.filename.endsWith('.mov')
+                  ? '🎬'
+                  : '📸',
+              style: const TextStyle(fontSize: 24),
             ),
-
-            // 삭제 버튼
-            GestureDetector(
-              onTap: () => _confirmDelete(provider),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  '🗑️ 삭제',
-                  style: TextStyle(
-                    color: Color(0xFFE63946),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
-                ),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                photo.filename,
+                style: const TextStyle(
+                    fontSize: 8, color: Colors.white70),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -388,117 +388,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
     );
   }
 
-  /// 삭제 확인 다이얼로그
-  void _confirmDelete(PhotoProvider provider) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A28),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('선택 사진 삭제'),
-        content: Text(
-          '${provider.selectedCount}장의 사진을 폰에서 삭제합니다.\n\n'
-          '• 외장하드 원본은 유지됩니다.\n'
-          '• 웹 미리보기도 유지됩니다.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFE63946),
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              // TODO: API 호출로 삭제 실행
-              provider.clearSelection();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('✅ 삭제 요청이 전송되었습니다')),
-              );
-            },
-            child: const Text('삭제', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 사진 상세 모달
+  /// 사진 상세 — 전체화면 뷰어
   void _showPhotoDetail(PhotoModel photo, PhotoProvider provider) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1A1A28),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _PhotoViewerPage(photo: photo, provider: provider),
       ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 핸들
-              Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // 파일명
-              Text(
-                photo.filename,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // 메타데이터
-              _metaRow(Icons.calendar_today, photo.takenAt ?? '날짜 없음'),
-              _metaRow(Icons.place, photo.placeName ?? '위치 미상'),
-              _metaRow(Icons.people, photo.persons.isEmpty
-                  ? '인물 없음'
-                  : photo.persons.join(', ')),
-              _metaRow(Icons.cloud_done,
-                  photo.isBackedUp ? '✅ 백업 완료' : '⏳ 백업 대기'),
-
-              const SizedBox(height: 20),
-
-              // 즐겨찾기 토글
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () {
-                    provider.toggleFavorite(photo.id);
-                    Navigator.pop(ctx);
-                  },
-                  icon: Icon(
-                    photo.isFavorite ? Icons.favorite : Icons.favorite_border,
-                  ),
-                  label: Text(photo.isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: photo.isFavorite
-                        ? const Color(0xFFFF4D6D)
-                        : const Color(0xFF2A2A3D),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 12),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -507,35 +402,383 @@ class _GalleryScreenState extends State<GalleryScreen> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: Colors.white54),
+          Icon(icon, size: 16, color: Colors.black54),
           const SizedBox(width: 10),
-          Text(text, style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                  color: Colors.black.withValues(alpha: 0.7), fontSize: 14),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
   }
 
   /// 빈 상태
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(SyncProvider syncProvider) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('📷', style: TextStyle(fontSize: 48, color: Colors.white.withValues(alpha: 0.3))),
+          Text('📷',
+              style: TextStyle(
+                  fontSize: 48,
+                  color: Colors.black.withValues(alpha: 0.3))),
           const SizedBox(height: 16),
           Text(
-            _showFavoritesOnly ? '즐겨찾기한 사진이 없습니다' : '사진이 없습니다',
+            _showFavoritesOnly ? '즐겨찾기한 사진이 없습니다' : '백업된 사진이 없습니다',
             style: TextStyle(
               fontSize: 16,
-              color: Colors.white.withValues(alpha: 0.5),
+              color: Colors.black.withValues(alpha: 0.5),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            '서버와 동기화하면 사진이 표시됩니다',
+            syncProvider.isServerOnline
+                ? '전송 탭에서 사진을 전송하면 여기에 표시됩니다'
+                : '설정에서 서버를 연결해주세요',
             style: TextStyle(
               fontSize: 13,
-              color: Colors.white.withValues(alpha: 0.3),
+              color: Colors.black.withValues(alpha: 0.3),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 전체화면 사진/동영상 뷰어
+class _PhotoViewerPage extends StatefulWidget {
+  final PhotoModel photo;
+  final PhotoProvider provider;
+
+  const _PhotoViewerPage({required this.photo, required this.provider});
+
+  @override
+  State<_PhotoViewerPage> createState() => _PhotoViewerPageState();
+}
+
+class _PhotoViewerPageState extends State<_PhotoViewerPage> {
+  VideoPlayerController? _videoController;
+  bool _isVideoInitialized = false;
+  bool _isVideoError = false;
+  bool _isPlaying = false;
+  String _videoErrorMsg = '';
+
+  bool get _isVideo {
+    final fn = widget.photo.filename.toLowerCase();
+    return fn.endsWith('.mp4') || fn.endsWith('.mov') || fn.endsWith('.3gp');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isVideo) {
+      _initVideo();
+    }
+  }
+
+  Future<void> _initVideo() async {
+    final url = apiService.getOriginalFileUrl(widget.photo.id);
+    _videoErrorMsg = url;
+    try {
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
+      _videoController!.addListener(() {
+        if (mounted) {
+          final playing = _videoController!.value.isPlaying;
+          if (playing != _isPlaying) {
+            setState(() => _isPlaying = playing);
+          }
+        }
+      });
+      await _videoController!.initialize();
+      if (mounted) {
+        setState(() => _isVideoInitialized = true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isVideoError = true;
+          _videoErrorMsg = '$url\n에러: $e';
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = apiService.getOriginalFileUrl(widget.photo.id);
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(
+          widget.photo.filename,
+          style: const TextStyle(fontSize: 14),
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(
+              widget.photo.isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: widget.photo.isFavorite
+                  ? const Color(0xFFFF4D6D)
+                  : Colors.white54,
+            ),
+            onPressed: () {
+              widget.provider.toggleFavorite(widget.photo.id);
+              Navigator.pop(context);
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.info_outline, color: Colors.white54),
+            onPressed: () => _showInfoSheet(context),
+          ),
+        ],
+      ),
+      body: _isVideo ? _buildVideoPlayer() : _buildImageViewer(imageUrl),
+    );
+  }
+
+  Widget _buildImageViewer(String imageUrl) {
+    return Center(
+      child: InteractiveViewer(
+        minScale: 0.5,
+        maxScale: 4.0,
+        child: Image.network(
+          imageUrl,
+          fit: BoxFit.contain,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Center(
+              child: CircularProgressIndicator(
+                color: Colors.white38,
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            );
+          },
+          errorBuilder: (_, error, __) => Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.broken_image, color: Colors.white38, size: 48),
+                const SizedBox(height: 8),
+                Text('$error',
+                    style: const TextStyle(color: Colors.white38, fontSize: 10),
+                    textAlign: TextAlign.center),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoPlayer() {
+    if (_isVideoError) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white38, size: 48),
+              const SizedBox(height: 12),
+              const Text('동영상을 재생할 수 없습니다',
+                  style: TextStyle(color: Colors.white54)),
+              const SizedBox(height: 8),
+              Text(_videoErrorMsg,
+                  style: const TextStyle(color: Colors.white24, fontSize: 9),
+                  textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (!_isVideoInitialized) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: Colors.white38),
+            SizedBox(height: 12),
+            Text('동영상 로딩 중...', style: TextStyle(color: Colors.white54)),
+          ],
+        ),
+      );
+    }
+
+    return SafeArea(
+      child: Column(
+        children: [
+          // 동영상 영역 + 재생 버튼 오버레이
+          Expanded(
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: _videoController!.value.aspectRatio,
+                child: GestureDetector(
+                  onTap: _togglePlayPause,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      VideoPlayer(_videoController!),
+                      // 큰 재생/일시정지 버튼 (영상 위 오버레이)
+                      AnimatedOpacity(
+                        opacity: _isPlaying ? 0.0 : 1.0,
+                        duration: const Duration(milliseconds: 300),
+                        child: Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.play_arrow,
+                            color: Colors.white,
+                            size: 48,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // 하단 컨트롤
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 프로그레스 바
+                VideoProgressIndicator(
+                  _videoController!,
+                  allowScrubbing: true,
+                  colors: const VideoProgressColors(
+                    playedColor: Color(0xFF7C6AEF),
+                    bufferedColor: Colors.white24,
+                    backgroundColor: Colors.white12,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // 컨트롤 버튼
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.replay_10, color: Colors.white70, size: 28),
+                      onPressed: () {
+                        final pos = _videoController!.value.position;
+                        _videoController!.seekTo(pos - const Duration(seconds: 10));
+                      },
+                    ),
+                    const SizedBox(width: 24),
+                    IconButton(
+                      icon: Icon(
+                        _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                        color: Colors.white,
+                        size: 48,
+                      ),
+                      onPressed: _togglePlayPause,
+                    ),
+                    const SizedBox(width: 24),
+                    IconButton(
+                      icon: const Icon(Icons.forward_10, color: Colors.white70, size: 28),
+                      onPressed: () {
+                        final pos = _videoController!.value.position;
+                        _videoController!.seekTo(pos + const Duration(seconds: 10));
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _togglePlayPause() {
+    if (_videoController == null) return;
+    if (_videoController!.value.isPlaying) {
+      _videoController!.pause();
+    } else {
+      _videoController!.play();
+    }
+  }
+
+  void _showInfoSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A2E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _infoRow(Icons.insert_drive_file, widget.photo.filename),
+              _infoRow(
+                  Icons.calendar_today, widget.photo.takenAt ?? '날짜 없음'),
+              _infoRow(Icons.place, widget.photo.placeName ?? '위치 미상'),
+              _infoRow(
+                  Icons.camera_alt, widget.photo.cameraModel ?? '카메라 미상'),
+              _infoRow(Icons.cloud_done,
+                  widget.photo.isBackedUp ? '백업 완료' : '백업 대기'),
+              if (widget.photo.fileSize != null)
+                _infoRow(Icons.storage,
+                    '${(widget.photo.fileSize! / 1024 / 1024).toStringAsFixed(1)}MB'),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _infoRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.white54),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

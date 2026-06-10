@@ -7,6 +7,7 @@
 
 import shutil
 import asyncio
+from send2trash import send2trash
 from pathlib import Path
 from datetime import datetime
 
@@ -25,22 +26,27 @@ class BufferService:
         """버퍼 디렉토리 생성"""
         self.buffer_path.mkdir(parents=True, exist_ok=True)
 
-    def save_to_buffer(self, file_bytes: bytes, filename: str) -> str:
+    def save_to_buffer(self, file_bytes: bytes, filename: str, file_hash: str = None) -> str:
         """
-        사진을 임시 버퍼에 저장
+        사진을 임시 버퍼에 저장 (원본 파일명 유지)
+
+        Args:
+            file_bytes: 파일 바이트
+            filename: 원본 파일명
+            file_hash: 파일 해시 (중복 방지용)
 
         Returns:
             저장된 파일 경로
         """
         self.ensure_dir()
+
+        # 원본 파일명 그대로 사용
         file_path = self.buffer_path / filename
 
-        # 동일 파일 존재 시 타임스탬프 추가
+        # 이미 동일 파일이 있으면 저장 건너뛰기
         if file_path.exists():
-            stem = file_path.stem
-            suffix = file_path.suffix
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            file_path = self.buffer_path / f"{stem}_{timestamp}{suffix}"
+            print(f"📦 버퍼 기존 파일 사용: {file_path}")
+            return str(file_path)
 
         with open(file_path, "wb") as f:
             f.write(file_bytes)
@@ -120,12 +126,15 @@ class BufferService:
                     (result, item["photo_id"])
                 )
 
-                # 버퍼 파일 삭제
+                # 버퍼 파일을 휴지통으로 이동 (복원 가능)
                 try:
-                    buffer_path.unlink()
-                    print(f"🗑️ 버퍼 파일 삭제: {buffer_path}")
+                    send2trash(str(buffer_path))
+                    print(f"🗑️ 버퍼 파일 → 휴지통: {buffer_path}")
                 except Exception:
-                    pass
+                    try:
+                        buffer_path.unlink()
+                    except Exception:
+                        pass
 
                 transferred += 1
             else:
@@ -149,11 +158,24 @@ class BufferService:
         }
 
     async def get_pending_count(self) -> int:
-        """대기 중인 파일 수"""
-        result = await db.fetch_one(
-            "SELECT COUNT(*) as cnt FROM buffer_queue WHERE status IN ('pending', 'failed') AND retry_count < 3"
+        """대기 중인 파일 수 (실제 파일 존재 여부 확인)"""
+        pending = await db.fetch_all(
+            "SELECT id, photo_id, buffer_file_path FROM buffer_queue WHERE status IN ('pending', 'failed') AND retry_count < 3"
         )
-        return result["cnt"] if result else 0
+
+        actual_count = 0
+        for item in pending:
+            if Path(item["buffer_file_path"]).exists():
+                actual_count += 1
+            else:
+                # 파일이 삭제되었으면 DB 기록도 정리
+                await db.execute("DELETE FROM buffer_queue WHERE id = ?", (item["id"],))
+                await db.execute("DELETE FROM photo_persons WHERE photo_id = ?", (item["photo_id"],))
+                await db.execute("DELETE FROM photo_places WHERE photo_id = ?", (item["photo_id"],))
+                await db.execute("DELETE FROM photos WHERE id = ?", (item["photo_id"],))
+                print(f"🧹 삭제된 파일 DB 정리: {item['buffer_file_path']}")
+
+        return actual_count
 
     def get_buffer_size_mb(self) -> float:
         """버퍼 폴더 크기 (MB)"""
