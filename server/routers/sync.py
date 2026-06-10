@@ -38,17 +38,20 @@ async def sync_data(
     from datetime import datetime, timezone
     from pathlib import Path
 
-    # 파일이 삭제된 레코드 자동 정리
-    all_photos_check = await db.fetch_all("SELECT id, buffer_path, original_path FROM photos")
+    # 파일이 삭제된 레코드 자동 정리 (단, 썸네일이 남아있으면 유지)
+    all_photos_check = await db.fetch_all("SELECT id, buffer_path, original_path, thumbnail_path FROM photos")
     for p in all_photos_check:
         buffer_exists = Path(p["buffer_path"]).exists() if p["buffer_path"] else False
         original_exists = Path(p["original_path"]).exists() if p["original_path"] else False
-        if not buffer_exists and not original_exists:
+        thumbnail_exists = Path(p["thumbnail_path"]).exists() if p["thumbnail_path"] else False
+        
+        # 썸네일이 남아있으면 레코드 유지 (백업 갤러리에서 미리보기 가능)
+        if not buffer_exists and not original_exists and not thumbnail_exists:
             await db.execute("DELETE FROM photo_persons WHERE photo_id = ?", (p["id"],))
             await db.execute("DELETE FROM photo_places WHERE photo_id = ?", (p["id"],))
             await db.execute("DELETE FROM buffer_queue WHERE photo_id = ?", (p["id"],))
             await db.execute("DELETE FROM photos WHERE id = ?", (p["id"],))
-            print(f"🧹 파일 없는 레코드 정리: {p['id'][:16]}...")
+            print(f"🧹 파일+썸네일 모두 없는 레코드 정리: {p['id'][:16]}...")
 
     # 사진 메타데이터
     if last_sync_at:
