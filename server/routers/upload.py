@@ -554,6 +554,80 @@ async def get_original_file(photo_id: str, request: Request = None):
         )
 
 
+@router.delete("/delete")
+async def delete_photos(request: Request):
+    """
+    사진 삭제 (서버에서 완전 삭제)
+
+    - DB 레코드 삭제 (photos, photo_persons, photo_places, buffer_queue)
+    - 썸네일 파일 삭제
+    - 버퍼 파일 삭제
+    - 외장하드에 이미 이관된 파일은 그대로 유지
+    """
+    import os
+
+    body = await request.json()
+    photo_ids = body.get("photo_ids", [])
+
+    if not photo_ids:
+        raise HTTPException(status_code=400, detail="삭제할 사진 ID가 없습니다")
+
+    deleted_count = 0
+
+    for photo_id in photo_ids:
+        # 사진 정보 조회
+        photo = await db.fetch_one(
+            "SELECT id, thumbnail_path, buffer_path FROM photos WHERE id = ?",
+            (photo_id,)
+        )
+        if not photo:
+            continue
+
+        # 1. 썸네일 파일 삭제
+        if photo["thumbnail_path"]:
+            try:
+                thumb = Path(photo["thumbnail_path"])
+                if thumb.exists():
+                    thumb.unlink()
+                    print(f"🗑️ 썸네일 삭제: {thumb.name}")
+            except Exception as e:
+                print(f"⚠️ 썸네일 삭제 실패: {e}")
+
+        # 2. 버퍼 파일 삭제
+        if photo["buffer_path"]:
+            try:
+                buf = Path(photo["buffer_path"])
+                if buf.exists():
+                    buf.unlink()
+                    print(f"🗑️ 버퍼 파일 삭제: {buf.name}")
+            except Exception as e:
+                print(f"⚠️ 버퍼 파일 삭제 실패: {e}")
+
+        # 3. buffer_queue에서 버퍼 파일 경로 확인 후 삭제
+        buf_record = await db.fetch_one(
+            "SELECT buffer_file_path FROM buffer_queue WHERE photo_id = ?",
+            (photo_id,)
+        )
+        if buf_record and buf_record["buffer_file_path"]:
+            try:
+                buf_file = Path(buf_record["buffer_file_path"])
+                if buf_file.exists():
+                    buf_file.unlink()
+            except Exception:
+                pass
+
+        # 4. DB 레코드 삭제 (관련 테이블 먼저)
+        await db.execute("DELETE FROM photo_persons WHERE photo_id = ?", (photo_id,))
+        await db.execute("DELETE FROM photo_places WHERE photo_id = ?", (photo_id,))
+        await db.execute("DELETE FROM buffer_queue WHERE photo_id = ?", (photo_id,))
+        await db.execute("DELETE FROM photos WHERE id = ?", (photo_id,))
+
+        deleted_count += 1
+        print(f"🗑️ 사진 삭제 완료: {photo_id[:16]}...")
+
+    return {"deleted": deleted_count, "total_requested": len(photo_ids)}
+
+
 @router.get("/map-data")
 async def get_map_data():
     """지도 표시용 데이터 (좌표 + 사진 수)"""

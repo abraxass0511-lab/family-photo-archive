@@ -53,6 +53,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
                       ? _buildEmptyState(syncProvider)
                       : _buildPhotoGrid(photos, provider),
                 ),
+
+                // 하단 삭제 바 (선택 모드)
+                if (provider.selectedCount > 0)
+                  _buildDeleteBar(provider, syncProvider),
               ],
             ),
           ),
@@ -79,6 +83,48 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 ),
               ),
               const Spacer(),
+
+              // 전체 선택 / 해제 버튼
+              if (provider.photos.isNotEmpty)
+                GestureDetector(
+                  onTap: () {
+                    if (provider.selectedCount > 0) {
+                      provider.clearSelection();
+                    } else {
+                      provider.selectAll();
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: provider.selectedCount > 0
+                          ? const Color(0xFF7C6AEF).withValues(alpha: 0.15)
+                          : Colors.black.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: provider.selectedCount > 0
+                            ? const Color(0xFF7C6AEF).withValues(alpha: 0.3)
+                            : Colors.black.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    child: Text(
+                      provider.selectedCount > 0
+                          ? '해제 (${provider.selectedCount})'
+                          : '전체 선택',
+                      style: TextStyle(
+                        color: provider.selectedCount > 0
+                            ? const Color(0xFF7C6AEF)
+                            : Colors.black54,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+
+              const SizedBox(width: 8),
+
               // 동기화 버튼
               GestureDetector(
                 onTap: syncProvider.isSyncing
@@ -237,17 +283,73 @@ class _GalleryScreenState extends State<GalleryScreen> {
     return CustomScrollView(
       slivers: [
         for (final dateKey in dateKeys) ...[
-          // 날짜 헤더
+          // 날짜 헤더 (체크박스 포함)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
-              child: Text(
-                _formatDateHeader(dateKey),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1A1A2E),
-                ),
+              child: Builder(
+                builder: (context) {
+                  final datePhotos = grouped[dateKey]!;
+                  final datePhotoIds = datePhotos.map((p) => p.id).toList();
+                  final allSelected = datePhotoIds.every(
+                      (id) => provider.selectedIds.contains(id));
+                  final someSelected = !allSelected &&
+                      datePhotoIds.any(
+                          (id) => provider.selectedIds.contains(id));
+
+                  return GestureDetector(
+                    onTap: () => provider.toggleDateSelection(datePhotoIds),
+                    child: Row(
+                      children: [
+                        // 날짜 체크박스
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: allSelected
+                                ? const Color(0xFF7C6AEF)
+                                : someSelected
+                                    ? const Color(0xFF7C6AEF)
+                                        .withValues(alpha: 0.4)
+                                    : Colors.black.withValues(alpha: 0.12),
+                            border: Border.all(
+                              color: allSelected || someSelected
+                                  ? const Color(0xFF7C6AEF)
+                                  : Colors.black.withValues(alpha: 0.2),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: allSelected
+                              ? const Icon(Icons.check,
+                                  color: Colors.white, size: 14)
+                              : someSelected
+                                  ? const Icon(Icons.remove,
+                                      color: Colors.white, size: 14)
+                                  : null,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _formatDateHeader(dateKey),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1A1A2E),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${datePhotos.length}장',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black.withValues(alpha: 0.35),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -266,8 +368,24 @@ class _GalleryScreenState extends State<GalleryScreen> {
                   final isVideoItem = photo.filename.toLowerCase().endsWith('.mp4') ||
                       photo.filename.toLowerCase().endsWith('.mov') ||
                       photo.filename.toLowerCase().endsWith('.3gp');
+                  final isSelected = provider.selectedIds.contains(photo.id);
+
                   return GestureDetector(
-                    onTap: () => _showPhotoDetail(photo, provider),
+                    onTap: () {
+                      // 선택 모드이면 선택/해제, 아니면 상세보기
+                      if (provider.selectMode) {
+                        provider.toggleSelection(photo.id);
+                      } else {
+                        _showPhotoDetail(photo, provider);
+                      }
+                    },
+                    onLongPress: () {
+                      // 롱프레스로 선택 모드 진입
+                      if (!provider.selectMode) {
+                        provider.toggleSelectMode();
+                      }
+                      provider.toggleSelection(photo.id);
+                    },
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -307,6 +425,40 @@ class _GalleryScreenState extends State<GalleryScreen> {
                             top: 6,
                             right: 6,
                             child: Text('❤️', style: TextStyle(fontSize: 14)),
+                          ),
+                        // 선택 체크 마크
+                        Positioned(
+                          top: 4,
+                          left: 4,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isSelected
+                                  ? const Color(0xFF7C6AEF)
+                                  : Colors.black.withValues(alpha: 0.3),
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFF7C6AEF)
+                                    : Colors.white.withValues(alpha: 0.5),
+                                width: 2,
+                              ),
+                            ),
+                            child: isSelected
+                                ? const Icon(Icons.check, color: Colors.white, size: 14)
+                                : null,
+                          ),
+                        ),
+                        // 선택 오버레이
+                        if (isSelected)
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: const Color(0xFF7C6AEF), width: 3),
+                            ),
                           ),
                       ],
                     ),
@@ -444,6 +596,150 @@ class _GalleryScreenState extends State<GalleryScreen> {
               fontSize: 13,
               color: Colors.black.withValues(alpha: 0.3),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 하단 삭제 바
+  Widget _buildDeleteBar(PhotoProvider provider, SyncProvider syncProvider) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFF4D6D), Color(0xFFFF2D55)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFF4D6D).withValues(alpha: 0.4),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Expanded(
+              child: Row(
+                children: [
+                  const Text(
+                    '🗑️ 서버에서 삭제',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '${provider.selectedCount}개',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // 해제 버튼
+            GestureDetector(
+              onTap: () => provider.clearSelection(),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  '해제',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // 삭제 버튼
+            GestureDetector(
+              onTap: () => _confirmDeleteSelected(provider, syncProvider),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  '삭제',
+                  style: TextStyle(
+                    color: Color(0xFFFF4D6D),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 삭제 확인 다이얼로그
+  void _confirmDeleteSelected(PhotoProvider provider, SyncProvider syncProvider) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('백업 사진 삭제',
+            style: TextStyle(
+                color: Color(0xFF1A1A2E), fontWeight: FontWeight.w600)),
+        content: Text(
+          '${provider.selectedCount}개의 사진/동영상을 서버에서 삭제합니다.\n\n'
+          '⚠️ DB 레코드, 썸네일, 버퍼 파일이 모두 삭제됩니다.\n'
+          '• 외장하드에 이미 이관된 파일은 유지됩니다.',
+          style: const TextStyle(color: Color(0xFF444444), height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFFF4D6D),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final deleted = await provider.deleteSelected();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('🗑️ $deleted개 사진 삭제 완료'),
+                    backgroundColor: const Color(0xFFFF4D6D),
+                  ),
+                );
+                // 삭제 후 자동 동기화
+                await syncProvider.sync(provider);
+              }
+            },
+            child: const Text('삭제', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

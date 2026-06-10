@@ -205,6 +205,20 @@ class ApiService {
     }
   }
 
+  /// 서버에서 사진 완전 삭제 (DB + 파일)
+  Future<int> deletePhotos(List<String> photoIds) async {
+    try {
+      final resp = await _dio.delete('$_baseUrl/api/photos/delete',
+          data: {'photo_ids': photoIds});
+      if (resp.statusCode == 200) {
+        return resp.data['deleted'] ?? 0;
+      }
+    } catch (e) {
+      print('사진 삭제 실패: $e');
+    }
+    return 0;
+  }
+
   // === 서버 상태 ===
 
   /// 서버 상세 상태 조회

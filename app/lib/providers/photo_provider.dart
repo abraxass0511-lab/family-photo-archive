@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/photo_model.dart';
 import '../db/local_database.dart';
+import '../services/api_service.dart';
 
 /// 사진 데이터 상태 관리
 class PhotoProvider extends ChangeNotifier {
@@ -91,16 +92,34 @@ class PhotoProvider extends ChangeNotifier {
   }
 
   void toggleSelection(String photoId) {
-    // 백업 완료된 사진만 선택 가능
-    final photo = _photos.firstWhere((p) => p.id == photoId,
-        orElse: () => PhotoModel(id: '', filename: ''));
-    if (!photo.isBackedUp) return;
-
     if (_selectedIds.contains(photoId)) {
       _selectedIds.remove(photoId);
     } else {
       _selectedIds.add(photoId);
     }
+    // 선택이 없으면 선택 모드 자동 해제
+    if (_selectedIds.isEmpty) _selectMode = false;
+    notifyListeners();
+  }
+
+  /// 날짜별 전체 선택/해제 (날짜 헤더 클릭 시)
+  void toggleDateSelection(List<String> photoIds) {
+    final allSelected = photoIds.every((id) => _selectedIds.contains(id));
+    if (allSelected) {
+      // 전부 선택됨 → 전부 해제
+      _selectedIds.removeAll(photoIds);
+    } else {
+      // 하나라도 미선택 → 전부 선택
+      _selectedIds.addAll(photoIds);
+    }
+    _selectMode = _selectedIds.isNotEmpty;
+    notifyListeners();
+  }
+
+  /// 전체 사진 선택
+  void selectAll() {
+    _selectedIds = _photos.map((p) => p.id).toSet();
+    _selectMode = _selectedIds.isNotEmpty;
     notifyListeners();
   }
 
@@ -111,6 +130,29 @@ class PhotoProvider extends ChangeNotifier {
   }
 
   int get selectedCount => _selectedIds.length;
+
+  /// 선택한 사진 서버에서 삭제
+  Future<int> deleteSelected() async {
+    if (_selectedIds.isEmpty) return 0;
+
+    final idsToDelete = _selectedIds.toList();
+    final deleted = await apiService.deletePhotos(idsToDelete);
+
+    if (deleted > 0) {
+      // 로컬 리스트에서 제거
+      _photos.removeWhere((p) => idsToDelete.contains(p.id));
+      _selectedIds.clear();
+      _selectMode = false;
+
+      // 로컬 DB도 갱신
+      await LocalDatabase.clearPhotos();
+      await LocalDatabase.bulkUpsertPhotos(_photos);
+
+      notifyListeners();
+    }
+
+    return deleted;
+  }
 
   /// 검색
   List<PhotoModel> search(String query) {
