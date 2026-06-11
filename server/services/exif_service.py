@@ -108,6 +108,7 @@ class ExifService:
           - IMG_20260530_133749.jpg → 2026-05-30T13:37:49
           - Screenshot_20260530_133749.jpg → 2026-05-30T13:37:49
           - VID_20260530_133749.mp4 → 2026-05-30T13:37:49
+          - 2025_11_24 10_32.mp4 → 2025-11-24T10:32:00 (카카오톡 등)
           - 20260530.jpg → 2026-05-30T00:00:00
         """
         import re
@@ -127,7 +128,19 @@ class ExifService:
             except ValueError:
                 pass
 
-        # 패턴 2: YYYYMMDD만 (시간 없음)
+        # 패턴 2: YYYY_MM_DD HH_MM (카카오톡, 메신저 저장 파일)
+        match = re.search(r'(\d{4})[_\-](0[1-9]|1[0-2])[_\-](0[1-9]|[12]\d|3[01])\s+(\d{2})[_\-](\d{2})', filename)
+        if match:
+            try:
+                dt = datetime(
+                    int(match.group(1)), int(match.group(2)), int(match.group(3)),
+                    int(match.group(4)), int(match.group(5))
+                )
+                return dt.isoformat()
+            except ValueError:
+                pass
+
+        # 패턴 3: YYYYMMDD만 (시간 없음)
         match = re.search(r'(\d{4})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])', filename)
         if match:
             try:
