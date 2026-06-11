@@ -896,6 +896,36 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
   }
 
   Widget _buildImageViewer(String imageUrl) {
+    // 서버 오프라인이면 로컬 썸네일 사용
+    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
+    if (!syncProvider.isServerOnline) {
+      // 로컬 썸네일이 있으면 표시
+      if (widget.photo.localThumbnailPath != null) {
+        final file = File(widget.photo.localThumbnailPath!);
+        if (file.existsSync()) {
+          return Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Image.file(file, fit: BoxFit.contain),
+            ),
+          );
+        }
+      }
+      // 로컬 파일도 없으면 에러 표시
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.wifi_off, color: Colors.white38, size: 48),
+            SizedBox(height: 8),
+            Text('서버 연결 시 고화질로 볼 수 있습니다',
+                style: TextStyle(color: Colors.white38, fontSize: 12)),
+          ],
+        ),
+      );
+    }
+
     return Center(
       child: InteractiveViewer(
         minScale: 0.5,
