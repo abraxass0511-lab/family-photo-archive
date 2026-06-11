@@ -272,6 +272,10 @@ class ExifService:
                 if landmark and landmark in _GENERIC_NAMES:
                     print(f"🔄 일반명 필터링: '{landmark}' → 동네이름으로 대체")
                     landmark = None
+                # 숫자만으로 된 이름 필터 (공항 게이트 번호 등)
+                if landmark and landmark.strip().isdigit():
+                    print(f"🔄 숫자명 필터링: '{landmark}' → 동네이름으로 대체")
+                    landmark = None
                 
                 # 2순위: 동네 이름
                 neighbourhood = (
