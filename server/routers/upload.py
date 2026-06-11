@@ -490,16 +490,20 @@ async def get_original_file(photo_id: str, request: Request = None):
         if fp.exists():
             file_path = fp
 
-    # 2) photos.buffer_path에서 조회
+    # 2) photos 테이블에서 조회 (buffer_path → original_path → thumbnail_path 순)
     if not file_path:
         photo = await db.fetch_one(
-            "SELECT buffer_path, thumbnail_path FROM photos WHERE id = ?", (photo_id,)
+            "SELECT buffer_path, original_path, thumbnail_path FROM photos WHERE id = ?", (photo_id,)
         )
         if photo:
             if photo["buffer_path"]:
                 bp = Path(photo["buffer_path"])
                 if bp.exists():
                     file_path = bp
+            if not file_path and photo["original_path"]:
+                op = Path(photo["original_path"])
+                if op.exists():
+                    file_path = op
             if not file_path and photo["thumbnail_path"]:
                 tp = Path(photo["thumbnail_path"])
                 if tp.exists():
