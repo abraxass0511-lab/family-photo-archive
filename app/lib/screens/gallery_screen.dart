@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -486,11 +487,18 @@ class _GalleryScreenState extends State<GalleryScreen> {
     }
   }
 
-  /// 썸네일 표시 (서버에서 로드)
+  /// 썸네일 표시 (로컬 우선 → 서버 폴백)
   Widget _buildThumbnail(PhotoModel photo) {
-    // 서버 썸네일 URL
-    final thumbUrl = apiService.getThumbnailUrl(photo.id);
+    // 1) 로컬 파일이 있으면 로컬에서 로드 (오프라인 지원)
+    if (photo.localThumbnailPath != null) {
+      final file = File(photo.localThumbnailPath!);
+      if (file.existsSync()) {
+        return Image.file(file, fit: BoxFit.cover);
+      }
+    }
 
+    // 2) 서버에서 로드
+    final thumbUrl = apiService.getThumbnailUrl(photo.id);
     return CachedNetworkImage(
       imageUrl: thumbUrl,
       fit: BoxFit.cover,
@@ -781,26 +789,54 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
   Future<void> _initVideo() async {
     final url = apiService.getOriginalFileUrl(widget.photo.id);
     _videoErrorMsg = url;
+
+    // 1) 서버 원본 재생 시도
     try {
       _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
-      _videoController!.addListener(() {
-        if (mounted) {
-          final playing = _videoController!.value.isPlaying;
-          if (playing != _isPlaying) {
-            setState(() => _isPlaying = playing);
-          }
-        }
-      });
+      _videoController!.addListener(_onVideoEvent);
       await _videoController!.initialize();
       if (mounted) {
         setState(() => _isVideoInitialized = true);
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isVideoError = true;
-          _videoErrorMsg = '$url\n에러: $e';
-        });
+      return; // 성공
+    } catch (_) {
+      _videoController?.dispose();
+      _videoController = null;
+    }
+
+    // 2) 로컬 미리보기(360p) 폴백
+    if (widget.photo.localPreviewPath != null) {
+      final file = File(widget.photo.localPreviewPath!);
+      if (file.existsSync()) {
+        try {
+          _videoController = VideoPlayerController.file(file);
+          _videoController!.addListener(_onVideoEvent);
+          await _videoController!.initialize();
+          if (mounted) {
+            setState(() => _isVideoInitialized = true);
+          }
+          return; // 성공
+        } catch (e2) {
+          _videoController?.dispose();
+          _videoController = null;
+        }
+      }
+    }
+
+    // 3) 전부 실패
+    if (mounted) {
+      setState(() {
+        _isVideoError = true;
+        _videoErrorMsg = '서버 연결 또는 외장하드를 확인해주세요';
+      });
+    }
+  }
+
+  void _onVideoEvent() {
+    if (mounted) {
+      final playing = _videoController!.value.isPlaying;
+      if (playing != _isPlaying) {
+        setState(() => _isPlaying = playing);
       }
     }
   }

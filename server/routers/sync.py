@@ -80,6 +80,7 @@ async def sync_data(
             is_backed_up=bool(p["is_backed_up"]),
             is_favorite=bool(p["is_favorite"]),
             thumbnail_path=p["thumbnail_path"],
+            has_preview=bool(p.get("preview_path")),
             persons=[per["name"] for per in persons],
             file_size=p["file_size"],
             camera_model=p["camera_model"],

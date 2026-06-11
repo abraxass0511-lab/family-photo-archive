@@ -246,6 +246,39 @@ class ApiService {
     return '$_baseUrl/api/photos/file/$photoId';
   }
 
+  /// 동영상 미리보기(360p) URL
+  String getPreviewUrl(String photoId) {
+    return '$_baseUrl/api/photos/preview/$photoId';
+  }
+
+  /// 썸네일 바이트 다운로드 (로컬 저장용)
+  Future<List<int>?> downloadThumbnailBytes(String photoId) async {
+    try {
+      final resp = await _dio.get(
+        '$_baseUrl/api/photos/thumbnail/$photoId',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      if (resp.statusCode == 200) {
+        return resp.data as List<int>;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// 미리보기 바이트 다운로드 (로컬 저장용)
+  Future<List<int>?> downloadPreviewBytes(String photoId) async {
+    try {
+      final resp = await _dio.get(
+        '$_baseUrl/api/photos/preview/$photoId',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      if (resp.statusCode == 200) {
+        return resp.data as List<int>;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   // === 비밀번호 변경 ===
 
   /// 비밀번호 변경

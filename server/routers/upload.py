@@ -164,11 +164,18 @@ async def upload_photo(
     is_video = file.content_type and file.content_type.startswith("video/")
     thumb_path = None
     thumb_bytes = None
+    preview_path = None
     if is_video:
         try:
             thumb_path = _create_video_thumbnail(contents, file_hash)
         except Exception as e:
             print(f"⚠️ 동영상 썸네일 생성 실패: {e}")
+        # 동영상 미리보기 생성 (360p MP4)
+        try:
+            from services.preview_service import preview_service
+            preview_path = preview_service.create_preview(contents, file_hash)
+        except Exception as e:
+            print(f"⚠️ 동영상 미리보기 생성 실패: {e}")
     else:
         try:
             thumb_path, thumb_bytes = thumbnail_service.create_thumbnail(contents, file_hash)
@@ -216,8 +223,8 @@ async def upload_photo(
     await db.execute(
         """INSERT INTO photos
            (id, filename, taken_at, latitude, longitude, place_name,
-            is_backed_up, thumbnail_path, buffer_path, file_size, camera_model, uploaded_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            is_backed_up, thumbnail_path, buffer_path, file_size, camera_model, preview_path, uploaded_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             file_hash,
             file.filename,
@@ -230,6 +237,7 @@ async def upload_photo(
             buffer_file_path,
             len(contents),
             exif_data["camera_model"],
+            preview_path,
             1,  # 가정용: 기본 사용자 ID
         )
     )
@@ -460,6 +468,25 @@ async def get_thumbnail(photo_id: str):
     return FileResponse(str(thumb_path), media_type="image/jpeg")
 
 
+@router.get("/preview/{photo_id}")
+async def get_preview(photo_id: str):
+    """동영상 미리보기(360p MP4) 서빙 — 앱 로컬 저장용"""
+    photo = await db.fetch_one(
+        "SELECT preview_path FROM photos WHERE id = ?", (photo_id,)
+    )
+    if not photo or not photo["preview_path"]:
+        raise HTTPException(status_code=404, detail="미리보기가 없습니다")
+
+    preview_path = Path(photo["preview_path"])
+    if not preview_path.exists():
+        raise HTTPException(status_code=404, detail="미리보기 파일을 찾을 수 없습니다")
+
+    return FileResponse(
+        str(preview_path),
+        media_type="video/mp4",
+        headers={"Accept-Ranges": "bytes"},
+    )
+
 @router.get("/file/{photo_id}")
 async def get_original_file(photo_id: str, request: Request = None):
     """원본 파일 서빙 (사진/동영상) - Range 요청 지원"""
@@ -490,10 +517,10 @@ async def get_original_file(photo_id: str, request: Request = None):
         if fp.exists():
             file_path = fp
 
-    # 2) photos 테이블에서 조회 (buffer_path → original_path → thumbnail_path 순)
+    # 2) photos 테이블에서 조회 (buffer_path → original_path → preview_path → thumbnail_path 순)
     if not file_path:
         photo = await db.fetch_one(
-            "SELECT buffer_path, original_path, thumbnail_path FROM photos WHERE id = ?", (photo_id,)
+            "SELECT buffer_path, original_path, preview_path, thumbnail_path FROM photos WHERE id = ?", (photo_id,)
         )
         if photo:
             if photo["buffer_path"]:
@@ -504,6 +531,10 @@ async def get_original_file(photo_id: str, request: Request = None):
                 op = Path(photo["original_path"])
                 if op.exists():
                     file_path = op
+            if not file_path and photo["preview_path"]:
+                pp = Path(photo["preview_path"])
+                if pp.exists():
+                    file_path = pp
             if not file_path and photo["thumbnail_path"]:
                 tp = Path(photo["thumbnail_path"])
                 if tp.exists():

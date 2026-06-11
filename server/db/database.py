@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS photos (
     buffer_path TEXT,                         -- 임시 버퍼 경로 (이관 전)
     file_size INTEGER,                        -- 원본 파일 크기 (bytes)
     camera_model TEXT,                        -- 카메라/폰 모델
+    preview_path TEXT,                        -- 동영상 미리보기 경로 (360p MP4)
     uploaded_by INTEGER REFERENCES users(id), -- 업로드한 사용자
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -136,6 +137,17 @@ class Database:
         # 스키마 생성
         await self._connection.executescript(SCHEMA_SQL)
         await self._connection.commit()
+
+        # 마이그레이션: preview_path 컬럼 추가 (기존 DB 호환)
+        try:
+            await self._connection.execute(
+                "ALTER TABLE photos ADD COLUMN preview_path TEXT"
+            )
+            await self._connection.commit()
+            print("📦 DB 마이그레이션: preview_path 컬럼 추가")
+        except Exception:
+            pass  # 이미 존재하면 무시
+
         print(f"✅ DB 연결 완료: {self.db_path}")
 
     async def disconnect(self):

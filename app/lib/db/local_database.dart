@@ -21,8 +21,9 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -39,6 +40,8 @@ class LocalDatabase {
         is_backed_up INTEGER DEFAULT 0,
         is_favorite INTEGER DEFAULT 0,
         thumbnail_path TEXT,
+        local_thumbnail_path TEXT,
+        local_preview_path TEXT,
         file_size INTEGER,
         camera_model TEXT,
         created_at TEXT DEFAULT (datetime('now'))
@@ -100,6 +103,13 @@ class LocalDatabase {
     await db.execute('CREATE INDEX idx_photos_place ON photos(place_name)');
     await db.execute('CREATE INDEX idx_photos_backed ON photos(is_backed_up)');
     await db.execute('CREATE INDEX idx_photos_coords ON photos(latitude, longitude)');
+  }
+
+  static Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE photos ADD COLUMN local_thumbnail_path TEXT');
+      await db.execute('ALTER TABLE photos ADD COLUMN local_preview_path TEXT');
+    }
   }
 
   // === CRUD 메서드 ===

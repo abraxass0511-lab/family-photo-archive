@@ -1,4 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import '../services/api_service.dart';
 import '../db/local_database.dart';
 import 'photo_provider.dart';
@@ -62,6 +65,9 @@ class SyncProvider extends ChangeNotifier {
         }
 
         _syncStatus = '동기화 완료 ✅';
+
+        // 4. 백그라운드에서 썸네일/미리보기 로컬 저장
+        _downloadMediaLocally(photoProvider);
       } else {
         _syncStatus = '데이터를 가져올 수 없습니다';
         return false;
@@ -95,6 +101,67 @@ class SyncProvider extends ChangeNotifier {
       if (success) {
         await LocalDatabase.clearOfflineQueue();
       }
+    }
+  }
+
+  /// 백그라운드: 썸네일/미리보기를 앱 로컬 저장소에 다운로드
+  Future<void> _downloadMediaLocally(PhotoProvider photoProvider) async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final thumbDir = Directory(p.join(dir.path, 'thumbnails'));
+      final previewDir = Directory(p.join(dir.path, 'previews'));
+      if (!thumbDir.existsSync()) thumbDir.createSync(recursive: true);
+      if (!previewDir.existsSync()) previewDir.createSync(recursive: true);
+
+      final db = await LocalDatabase.database;
+      final photos = photoProvider.photos;
+
+      for (final photo in photos) {
+        // 1) 썸네일 로컬 저장 (아직 없는 것만)
+        if (photo.localThumbnailPath == null) {
+          final thumbFile = File(p.join(thumbDir.path, '${photo.id}_thumb.jpg'));
+          if (!thumbFile.existsSync()) {
+            final bytes = await apiService.downloadThumbnailBytes(photo.id);
+            if (bytes != null && bytes.isNotEmpty) {
+              await thumbFile.writeAsBytes(bytes);
+            }
+          }
+          if (thumbFile.existsSync()) {
+            await db.update(
+              'photos',
+              {'local_thumbnail_path': thumbFile.path},
+              where: 'id = ?',
+              whereArgs: [photo.id],
+            );
+          }
+        }
+
+        // 2) 동영상 미리보기 로컬 저장 (동영상만, 아직 없는 것만)
+        final fn = photo.filename.toLowerCase();
+        final isVideo = fn.endsWith('.mp4') || fn.endsWith('.mov') || fn.endsWith('.3gp');
+        if (isVideo && photo.localPreviewPath == null) {
+          final previewFile = File(p.join(previewDir.path, '${photo.id}_preview.mp4'));
+          if (!previewFile.existsSync()) {
+            final bytes = await apiService.downloadPreviewBytes(photo.id);
+            if (bytes != null && bytes.isNotEmpty) {
+              await previewFile.writeAsBytes(bytes);
+            }
+          }
+          if (previewFile.existsSync()) {
+            await db.update(
+              'photos',
+              {'local_preview_path': previewFile.path},
+              where: 'id = ?',
+              whereArgs: [photo.id],
+            );
+          }
+        }
+      }
+
+      // 로컬 경로 반영을 위해 데이터 리로드
+      await photoProvider.loadFromLocal();
+    } catch (e) {
+      print('로컬 미디어 다운로드 오류: $e');
     }
   }
 }

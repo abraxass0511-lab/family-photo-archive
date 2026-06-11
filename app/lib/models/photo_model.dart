@@ -9,6 +9,8 @@ class PhotoModel {
   final bool isBackedUp;
   final bool isFavorite;
   final String? thumbnailPath;
+  final String? localThumbnailPath;
+  final String? localPreviewPath;
   final List<String> persons;
   final int? fileSize;
   final String? cameraModel;
@@ -23,6 +25,8 @@ class PhotoModel {
     this.isBackedUp = false,
     this.isFavorite = false,
     this.thumbnailPath,
+    this.localThumbnailPath,
+    this.localPreviewPath,
     this.persons = const [],
     this.fileSize,
     this.cameraModel,
@@ -39,6 +43,8 @@ class PhotoModel {
       isBackedUp: json['is_backed_up'] == true || json['is_backed_up'] == 1,
       isFavorite: json['is_favorite'] == true || json['is_favorite'] == 1,
       thumbnailPath: json['thumbnail_path'],
+      localThumbnailPath: json['local_thumbnail_path'],
+      localPreviewPath: json['local_preview_path'],
       persons: (json['persons'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
@@ -59,6 +65,8 @@ class PhotoModel {
       'is_backed_up': isBackedUp ? 1 : 0,
       'is_favorite': isFavorite ? 1 : 0,
       'thumbnail_path': thumbnailPath,
+      'local_thumbnail_path': localThumbnailPath,
+      'local_preview_path': localPreviewPath,
       'file_size': fileSize,
       'camera_model': cameraModel,
     };
@@ -70,6 +78,8 @@ class PhotoModel {
     String? placeName,
     double? latitude,
     double? longitude,
+    String? localThumbnailPath,
+    String? localPreviewPath,
   }) {
     return PhotoModel(
       id: id,
@@ -81,6 +91,8 @@ class PhotoModel {
       isBackedUp: isBackedUp ?? this.isBackedUp,
       isFavorite: isFavorite ?? this.isFavorite,
       thumbnailPath: thumbnailPath,
+      localThumbnailPath: localThumbnailPath ?? this.localThumbnailPath,
+      localPreviewPath: localPreviewPath ?? this.localPreviewPath,
       persons: persons,
       fileSize: fileSize,
       cameraModel: cameraModel,

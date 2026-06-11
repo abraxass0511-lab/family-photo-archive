@@ -108,6 +108,7 @@ class PhotoMetadata(BaseModel):
     is_backed_up: bool = False
     is_favorite: bool = False
     thumbnail_path: str | None = None
+    has_preview: bool = False  # 동영상 미리보기(360p) 존재 여부
     persons: list[str] = []  # 태깅된 인물 이름 목록
     file_size: int | None = None
     camera_model: str | None = None
