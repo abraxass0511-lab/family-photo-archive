@@ -205,10 +205,15 @@ class ExifService:
         except (IndexError, TypeError, ValueError):
             return 0.0
 
-    async def reverse_geocode(self, latitude: float, longitude: float) -> str | None:
+    async def reverse_geocode(self, latitude: float, longitude: float) -> tuple[str | None, str | None]:
         """
         GPS 좌표 → 주소 변환 (Nominatim, 100% 무료)
         - 속도 제한: 1초에 1요청 (정책 준수)
+        
+        Returns:
+            (place_name, address_key) 튜플
+            - place_name: 장소명 (예: "스타필드 하남")
+            - address_key: 건물 식별 키 (예: "750_미사대로") - 같은 건물 판별용
         """
         try:
             geocoder = await self._get_geocoder()
@@ -228,6 +233,11 @@ class ExifService:
                 
                 # 디버그: 전체 주소 출력
                 print(f"🔍 Nominatim 주소: {address}")
+                
+                # 건물 식별 키 생성 (같은 번지+도로 = 같은 건물)
+                house_num = address.get("house_number", "")
+                road = address.get("road", "")
+                address_key = f"{house_num}_{road}" if house_num and road else None
                 
                 # 1순위: 구체적 장소명 (매장, 관광지, 시설 등)
                 landmark = (
@@ -288,12 +298,12 @@ class ExifService:
                 else:
                     place_name = address.get("road") or location.address
                 
-                return place_name
+                return place_name, address_key
 
         except Exception as e:
             print(f"⚠️ 역지오코딩 실패 ({latitude}, {longitude}): {e}")
 
-        return None
+        return None, None
 
     async def search_places(self, query: str, limit: int = 5) -> list[dict]:
         """

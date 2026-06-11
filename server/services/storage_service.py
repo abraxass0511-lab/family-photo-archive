@@ -51,6 +51,68 @@ class StorageService:
 
         return self.external_path / date_str / safe_name
 
+    def find_existing_folder_by_address(self, taken_at: str | None, address_key: str | None) -> Path | None:
+        """
+        같은 날짜 + 같은 건물(번지+도로)에 이미 폴더가 있는지 확인
+        
+        예: 스타필드 내 Nike 매장 사진 업로드 시,
+            이미 "스타필드 하남" 폴더가 같은 주소(750_미사대로)로 있으면
+            해당 폴더 경로를 반환
+        """
+        if not address_key or not taken_at:
+            return None
+        
+        # 날짜 폴더 경로 계산
+        try:
+            dt = datetime.fromisoformat(taken_at)
+            date_str = f"{dt.year:04d}-{dt.month:02d}-{dt.day:02d}"
+        except (ValueError, TypeError):
+            return None
+        
+        date_folder = self.external_path / date_str
+        if not date_folder.exists():
+            return None
+        
+        # address_key 캐시 파일 확인
+        import json
+        cache_file = date_folder / ".address_keys.json"
+        if cache_file.exists():
+            try:
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    cache = json.load(f)
+                # 같은 address_key를 가진 폴더가 있는지 확인
+                for folder_name, cached_key in cache.items():
+                    if cached_key == address_key:
+                        existing = date_folder / folder_name
+                        if existing.exists():
+                            print(f"🏢 같은 건물 감지: {address_key} → 기존 폴더 '{folder_name}' 사용")
+                            return existing
+            except (json.JSONDecodeError, Exception):
+                pass
+        
+        return None
+    
+    def save_address_key(self, target_folder: Path, address_key: str | None):
+        """폴더의 address_key를 캐시에 저장"""
+        if not address_key or not target_folder.exists():
+            return
+        
+        import json
+        date_folder = target_folder.parent
+        cache_file = date_folder / ".address_keys.json"
+        
+        cache = {}
+        if cache_file.exists():
+            try:
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    cache = json.load(f)
+            except (json.JSONDecodeError, Exception):
+                pass
+        
+        cache[target_folder.name] = address_key
+        with open(cache_file, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+
     def save_to_external(self, source_path: str, target_folder: Path, filename: str) -> str | None:
         """
         파일을 외장하드에 저장

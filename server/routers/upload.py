@@ -152,8 +152,9 @@ async def upload_photo(
         has_gps = True
         print(f"📍 앱 위치 사용: {latitude:.6f}, {longitude:.6f}")
 
+    address_key = None
     if has_gps:
-        place_name = await exif_service.reverse_geocode(final_lat, final_lon)
+        place_name, address_key = await exif_service.reverse_geocode(final_lat, final_lon)
     
     # exif_data 업데이트
     exif_data["latitude"] = final_lat
@@ -189,7 +190,15 @@ async def upload_photo(
 
     # 5. 저장소 분기
     storage_status = "buffer"
-    target_folder = storage_service.get_target_folder(exif_data["taken_at"], place_name)
+    
+    # 같은 건물(번지+도로)의 기존 폴더가 있으면 해당 폴더 사용 (스타필드 Nike→스타필드 하남 병합)
+    existing_folder = storage_service.find_existing_folder_by_address(
+        exif_data["taken_at"], address_key
+    )
+    if existing_folder:
+        target_folder = existing_folder
+    else:
+        target_folder = storage_service.get_target_folder(exif_data["taken_at"], place_name)
     target_folder_name = target_folder.relative_to(storage_service.external_path).as_posix()
 
     if storage_service.is_drive_connected():
@@ -203,6 +212,8 @@ async def upload_photo(
         )
         if saved_path:
             storage_status = "external_drive"
+            # 건물 주소 키 캐시 저장 (같은 건물 사진 병합용)
+            storage_service.save_address_key(target_folder, address_key)
             # 버퍼 파일 삭제 (외장하드에 저장 완료)
             try:
                 from pathlib import Path as P
