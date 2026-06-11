@@ -489,7 +489,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
   /// 썸네일 표시 (로컬 우선 → 서버 폴백)
   Widget _buildThumbnail(PhotoModel photo) {
-    // 1) 로컬 파일이 있으면 로컬에서 로드 (오프라인 지원)
+    // 1) 로컬 파일이 있으면 무조건 로컬에서 로드
     if (photo.localThumbnailPath != null) {
       final file = File(photo.localThumbnailPath!);
       if (file.existsSync()) {
@@ -497,13 +497,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
       }
     }
 
-    // 2) 서버 오프라인이면 바로 placeholder (타임아웃 대기 방지)
-    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
-    if (!syncProvider.isServerOnline) {
-      return _buildPlaceholder(photo);
-    }
-
-    // 3) 서버에서 로드
+    // 2) 로컬 없으면 서버에서 로드 (짧은 타임아웃)
     final thumbUrl = apiService.getThumbnailUrl(photo.id);
     return CachedNetworkImage(
       imageUrl: thumbUrl,
@@ -793,29 +787,7 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
   }
 
   Future<void> _initVideo() async {
-    // 서버 온라인 확인
-    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
-    final isOnline = syncProvider.isServerOnline;
-
-    // 1) 서버 온라인일 때만 원본 재생 시도
-    if (isOnline) {
-      final url = apiService.getOriginalFileUrl(widget.photo.id);
-      _videoErrorMsg = url;
-      try {
-        _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
-        _videoController!.addListener(_onVideoEvent);
-        await _videoController!.initialize();
-        if (mounted) {
-          setState(() => _isVideoInitialized = true);
-        }
-        return; // 성공
-      } catch (_) {
-        _videoController?.dispose();
-        _videoController = null;
-      }
-    }
-
-    // 2) 로컬 미리보기(360p) 폴백
+    // 1) 로컬 미리보기(360p)가 있으면 무조건 로컬 우선
     if (widget.photo.localPreviewPath != null) {
       final file = File(widget.photo.localPreviewPath!);
       if (file.existsSync()) {
@@ -827,11 +799,27 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
             setState(() => _isVideoInitialized = true);
           }
           return; // 성공
-        } catch (e2) {
+        } catch (_) {
           _videoController?.dispose();
           _videoController = null;
         }
       }
+    }
+
+    // 2) 로컬 없으면 서버 원본 시도
+    final url = apiService.getOriginalFileUrl(widget.photo.id);
+    _videoErrorMsg = url;
+    try {
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
+      _videoController!.addListener(_onVideoEvent);
+      await _videoController!.initialize();
+      if (mounted) {
+        setState(() => _isVideoInitialized = true);
+      }
+      return; // 성공
+    } catch (_) {
+      _videoController?.dispose();
+      _videoController = null;
     }
 
     // 3) 전부 실패
@@ -896,36 +884,21 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
   }
 
   Widget _buildImageViewer(String imageUrl) {
-    // 서버 오프라인이면 로컬 썸네일 사용
-    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
-    if (!syncProvider.isServerOnline) {
-      // 로컬 썸네일이 있으면 표시
-      if (widget.photo.localThumbnailPath != null) {
-        final file = File(widget.photo.localThumbnailPath!);
-        if (file.existsSync()) {
-          return Center(
-            child: InteractiveViewer(
-              minScale: 0.5,
-              maxScale: 4.0,
-              child: Image.file(file, fit: BoxFit.contain),
-            ),
-          );
-        }
+    // 1) 로컬 썸네일이 있으면 무조건 로컬 사용
+    if (widget.photo.localThumbnailPath != null) {
+      final file = File(widget.photo.localThumbnailPath!);
+      if (file.existsSync()) {
+        return Center(
+          child: InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 4.0,
+            child: Image.file(file, fit: BoxFit.contain),
+          ),
+        );
       }
-      // 로컬 파일도 없으면 에러 표시
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.wifi_off, color: Colors.white38, size: 48),
-            SizedBox(height: 8),
-            Text('서버 연결 시 고화질로 볼 수 있습니다',
-                style: TextStyle(color: Colors.white38, fontSize: 12)),
-          ],
-        ),
-      );
     }
 
+    // 2) 로컬 없으면 서버에서 로드
     return Center(
       child: InteractiveViewer(
         minScale: 0.5,
@@ -945,15 +918,14 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
               ),
             );
           },
-          errorBuilder: (_, error, __) => Center(
+          errorBuilder: (_, error, __) => const Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.broken_image, color: Colors.white38, size: 48),
-                const SizedBox(height: 8),
-                Text('$error',
-                    style: const TextStyle(color: Colors.white38, fontSize: 10),
-                    textAlign: TextAlign.center),
+                Icon(Icons.wifi_off, color: Colors.white38, size: 48),
+                SizedBox(height: 8),
+                Text('서버 연결 시 고화질로 볼 수 있습니다',
+                    style: TextStyle(color: Colors.white38, fontSize: 12)),
               ],
             ),
           ),
