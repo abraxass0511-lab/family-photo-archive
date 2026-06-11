@@ -793,21 +793,26 @@ class _PhotoViewerPageState extends State<_PhotoViewerPage> {
   }
 
   Future<void> _initVideo() async {
-    final url = apiService.getOriginalFileUrl(widget.photo.id);
-    _videoErrorMsg = url;
+    // 서버 온라인 확인
+    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
+    final isOnline = syncProvider.isServerOnline;
 
-    // 1) 서버 원본 재생 시도
-    try {
-      _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
-      _videoController!.addListener(_onVideoEvent);
-      await _videoController!.initialize();
-      if (mounted) {
-        setState(() => _isVideoInitialized = true);
+    // 1) 서버 온라인일 때만 원본 재생 시도
+    if (isOnline) {
+      final url = apiService.getOriginalFileUrl(widget.photo.id);
+      _videoErrorMsg = url;
+      try {
+        _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
+        _videoController!.addListener(_onVideoEvent);
+        await _videoController!.initialize();
+        if (mounted) {
+          setState(() => _isVideoInitialized = true);
+        }
+        return; // 성공
+      } catch (_) {
+        _videoController?.dispose();
+        _videoController = null;
       }
-      return; // 성공
-    } catch (_) {
-      _videoController?.dispose();
-      _videoController = null;
     }
 
     // 2) 로컬 미리보기(360p) 폴백
