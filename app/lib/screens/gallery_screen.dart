@@ -497,7 +497,13 @@ class _GalleryScreenState extends State<GalleryScreen> {
       }
     }
 
-    // 2) 서버에서 로드
+    // 2) 서버 오프라인이면 바로 placeholder (타임아웃 대기 방지)
+    final syncProvider = Provider.of<SyncProvider>(context, listen: false);
+    if (!syncProvider.isServerOnline) {
+      return _buildPlaceholder(photo);
+    }
+
+    // 3) 서버에서 로드
     final thumbUrl = apiService.getThumbnailUrl(photo.id);
     return CachedNetworkImage(
       imageUrl: thumbUrl,

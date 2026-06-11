@@ -75,9 +75,34 @@ class PhotoProvider extends ChangeNotifier {
             .toList() ??
         [];
 
+    // 기존 로컬 경로 백업 (동기화 시 보존)
+    final db = await LocalDatabase.database;
+    final existingRows = await db.query('photos',
+        columns: ['id', 'local_thumbnail_path', 'local_preview_path']);
+    final localPaths = <String, Map<String, String?>>{};
+    for (final row in existingRows) {
+      localPaths[row['id'] as String] = {
+        'local_thumbnail_path': row['local_thumbnail_path'] as String?,
+        'local_preview_path': row['local_preview_path'] as String?,
+      };
+    }
+
     // 로컬 DB 전체 교체 (삭제된 항목 반영)
     await LocalDatabase.clearPhotos();
-    await LocalDatabase.bulkUpsertPhotos(photoList);
+
+    // 로컬 경로 복원하여 삽입
+    final photosWithLocalPaths = photoList.map((p) {
+      final saved = localPaths[p.id];
+      if (saved != null) {
+        return p.copyWith(
+          localThumbnailPath: saved['local_thumbnail_path'],
+          localPreviewPath: saved['local_preview_path'],
+        );
+      }
+      return p;
+    }).toList();
+
+    await LocalDatabase.bulkUpsertPhotos(photosWithLocalPaths);
     _photos = await LocalDatabase.getAllPhotos();
 
     notifyListeners();
