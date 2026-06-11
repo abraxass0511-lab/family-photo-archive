@@ -104,15 +104,7 @@ CREATE TABLE IF NOT EXISTS buffer_queue (
     transferred_at TIMESTAMP
 );
 
--- ============================================
--- API 호출 카운터 (비용 방어)
--- ============================================
-CREATE TABLE IF NOT EXISTS api_counters (
-    date TEXT NOT NULL,                       -- YYYY-MM-DD
-    api_name TEXT NOT NULL,                   -- 'nominatim', 'places' 등
-    call_count INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (date, api_name)
-);
+
 
 -- 인덱스 (검색 성능 최적화)
 CREATE INDEX IF NOT EXISTS idx_photos_taken_at ON photos(taken_at);

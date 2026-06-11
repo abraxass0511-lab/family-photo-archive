@@ -51,21 +51,6 @@ class Settings(BaseSettings):
     NOMINATIM_RATE_LIMIT: float = 1.0  # 초당 최대 1요청 (정책 준수)
 
 
-    # === 카카오 로컬 API (100% 무료, 일 10만 건) ===
-    # https://developers.kakao.com 에서 무료 앱 등록 후 REST API 키 입력
-    KAKAO_REST_API_KEY: str = ""
-
-    # === 정적 웹 배포 ===
-    WEB_BUILD_DIR: str = str(Path.home() / "PhotoBuffer" / "web_build")
-    WEB_PASSWORD_HASH: str = ""  # 공유 웹사이트 암호 해시
-    # AES-256 암호화 키 (배포 시 자동 생성)
-    WEB_ENCRYPTION_SALT: str = "family-photo-archive-aes-salt"
-
-    # === Cloudflare Pages 배포 (100% 무료) ===
-    CLOUDFLARE_PROJECT_NAME: str = "family-photo-archive"
-    # Wrangler CLI 토큰 (선택적 — 없으면 GitHub Pages 사용)
-    CLOUDFLARE_API_TOKEN: str = ""
-
     # === CORS 허용 도메인 ===
     ALLOWED_ORIGINS: list[str] = [
         "http://localhost:3000",
@@ -95,7 +80,6 @@ class Settings(BaseSettings):
             self.DATA_DIR,
             self.FACE_DATA_DIR,
             str(self.thumbnail_dir),
-            self.WEB_BUILD_DIR,
         ]:
             Path(dir_path).mkdir(parents=True, exist_ok=True)
 
