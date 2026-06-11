@@ -85,6 +85,13 @@ class BufferService:
         for item in pending:
             buffer_path = Path(item["buffer_file_path"])
 
+            # 하위호환: 기존 flat 형식 "2026-05-27_장소명" → 중첩 "2026-05-27/장소명"
+            target_folder_str = item["target_folder"]
+            if "/" not in target_folder_str and "\\" not in target_folder_str:
+                parts = target_folder_str.split("_", 1)
+                if len(parts) == 2:
+                    target_folder_str = parts[0] + "/" + parts[1]
+
             if not buffer_path.exists():
                 # 버퍼 파일이 없으면 실패 처리
                 await db.execute(
@@ -95,7 +102,7 @@ class BufferService:
                 continue
 
             # 외장하드 대상 폴더 생성
-            target_folder = Path(settings.EXTERNAL_DRIVE_PATH) / item["target_folder"]
+            target_folder = Path(settings.EXTERNAL_DRIVE_PATH) / target_folder_str
 
             # 이관 시도
             await db.execute(

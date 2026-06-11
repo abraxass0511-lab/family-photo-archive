@@ -216,28 +216,56 @@ class ExifService:
                 # 디버그: 전체 주소 출력
                 print(f"🔍 Nominatim 주소: {address}")
                 
-                # 1순위: 공원, 관광지, 유명 장소
+                # 1순위: 구체적 장소명 (매장, 관광지, 시설 등)
                 landmark = (
-                    address.get("leisure")       # 공원, 놀이터
-                    or address.get("tourism")    # 관광지
-                    or address.get("amenity")    # 편의시설 (카페, 학교 등)
+                    address.get("leisure")           # 공원, 놀이터
+                    or address.get("tourism")        # 관광지, 테마파크
+                    or address.get("amenity")        # 편의시설 (카페, 학교 등)
+                    or address.get("shop")           # 쇼핑몰 (스타필드, 이마트)
+                    or address.get("building")       # 건물명 (코엑스)
+                    or address.get("historic")       # 유적지 (경복궁)
+                    or address.get("railway")        # 역 (강남, 홍대입구)
+                    or address.get("aeroway")        # 공항
+                    or address.get("office")         # 사무실 건물
+                    or address.get("place_of_worship")  # 사찰, 성당
+                    or address.get("healthcare")     # 병원
+                    or address.get("school")         # 학교
+                    or address.get("stadium")        # 경기장
+                    or address.get("craft")          # 공방, 작업장
+                    or address.get("club")           # 클럽, 동호회
                 )
+                
+                # 일반 시설명 필터: 어디에나 있는 이름은 무시 → 동네이름으로 대체
+                _GENERIC_NAMES = {
+                    "잔디축구장", "축구장", "풋살장", "농구장", "테니스장",
+                    "보조경기장", "체육관", "운동장", "수영장", "배드민턴장",
+                    "주차장", "공영주차장", "놀이터", "어린이 놀이터",
+                    "화장실", "공중화장실", "정류장", "버스정류장",
+                    "벤치", "쉼터", "산책로", "자전거도로",
+                    "비상급수시설", "전기차충전소", "충전소",
+                    "보육시설", "유치원", "어린이집",
+                    "주민센터", "파출소", "우체국",
+                }
+                if landmark and landmark in _GENERIC_NAMES:
+                    print(f"🔄 일반명 필터링: '{landmark}' → 동네이름으로 대체")
+                    landmark = None
                 
                 # 2순위: 동네 이름
                 neighbourhood = (
-                    address.get("neighbourhood")  # 동네
-                    or address.get("quarter")     # 지역구
-                    or address.get("suburb")      # 행정동
+                    address.get("neighbourhood")     # 동네
+                    or address.get("quarter")        # 지역구
+                    or address.get("suburb")         # 행정동
+                    or address.get("village")        # 마을 (시골)
+                    or address.get("town")           # 읍면
                 )
                 
-                # 3순위: 시/구
+                # 3순위: 시/구/군
                 city = (
                     address.get("city")
                     or address.get("county")
-                    or address.get("town")
                 )
                 
-                # 조합: "동네" 또는 "랜드마크" (단독 도로명 방지)
+                # 조합: 랜드마크 > 동네 > 시/구 > 도로명 순
                 if landmark:
                     place_name = landmark
                 elif neighbourhood:

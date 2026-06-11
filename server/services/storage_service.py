@@ -28,11 +28,11 @@ class StorageService:
 
     def get_target_folder(self, taken_at: str | None, place_name: str | None) -> Path:
         """
-        저장 대상 폴더 경로 생성
+        저장 대상 폴더 경로 생성 (2단계 구조: 날짜/장소)
 
-        형식: X:/2024-03-15_하남스타필드/
-        GPS 없을 경우: X:/2024-03-15_위치미상/
-        날짜 없을 경우: X:/날짜미상_위치미상/
+        형식: X:/2024-03-15/하남스타필드/
+        GPS 없을 경우: X:/2024-03-15/위치미상/
+        날짜 없을 경우: X:/날짜미상/위치미상/
         """
         if taken_at:
             try:
@@ -49,8 +49,7 @@ class StorageService:
         else:
             safe_name = "위치미상"
 
-        folder_name = f"{date_str}_{safe_name}"
-        return self.external_path / folder_name
+        return self.external_path / date_str / safe_name
 
     def save_to_external(self, source_path: str, target_folder: Path, filename: str) -> str | None:
         """

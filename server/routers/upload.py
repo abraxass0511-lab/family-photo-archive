@@ -189,13 +189,11 @@ async def upload_photo(
 
     # 5. 저장소 분기
     storage_status = "buffer"
-    target_folder_name = storage_service.get_target_folder(
-        exif_data["taken_at"], place_name
-    ).name
+    target_folder = storage_service.get_target_folder(exif_data["taken_at"], place_name)
+    target_folder_name = target_folder.relative_to(storage_service.external_path).as_posix()
 
     if storage_service.is_drive_connected():
-        # 외장하드 직접 저장
-        target_folder = storage_service.get_target_folder(exif_data["taken_at"], place_name)
+        # 외장하드 직접 저장 (target_folder 이미 계산됨)
         # 임시로 버퍼에 저장
         temp_buffer = buffer_service.save_to_buffer(contents, file.filename)
         saved_path = storage_service.save_to_external(

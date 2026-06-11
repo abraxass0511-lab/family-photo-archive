@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     DRIVE_CHECK_INTERVAL: int = 5  # 초 단위 감시 간격
 
     # === 폴더 생성 형식 ===
-    FOLDER_FORMAT: str = "{year:04d}-{month:02d}-{day:02d}_{place_name}"
+    FOLDER_FORMAT: str = "{year:04d}-{month:02d}-{day:02d}/{place_name}"
 
     # === Nominatim (100% 무료 지오코딩) ===
     NOMINATIM_USER_AGENT: str = "family-photo-archive/1.0"
