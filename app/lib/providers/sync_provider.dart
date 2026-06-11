@@ -100,10 +100,24 @@ class SyncProvider extends ChangeNotifier {
 
     if (favoriteChanges.isNotEmpty) {
       final success = await apiService.syncFavorites(favoriteChanges);
-      if (success) {
-        await LocalDatabase.clearOfflineQueue();
+      if (!success) return; // 실패 시 큐 유지
+    }
+
+    // 오프라인 삭제 큐 처리
+    final deleteIds = queue
+        .where((q) => q['action'] == 'delete_photo')
+        .map((q) => q['photo_id'] as String)
+        .toList();
+
+    if (deleteIds.isNotEmpty) {
+      try {
+        await apiService.deletePhotos(deleteIds);
+      } catch (_) {
+        return; // 실패 시 큐 유지
       }
     }
+
+    await LocalDatabase.clearOfflineQueue();
   }
 
   /// 썸네일/미리보기를 앱 로컬 저장소에 다운로드 (병렬, 점진적 UI 갱신)

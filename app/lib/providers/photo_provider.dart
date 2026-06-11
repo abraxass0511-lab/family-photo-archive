@@ -161,22 +161,35 @@ class PhotoProvider extends ChangeNotifier {
     if (_selectedIds.isEmpty) return 0;
 
     final idsToDelete = _selectedIds.toList();
-    final deleted = await apiService.deletePhotos(idsToDelete);
+    final count = idsToDelete.length;
 
-    if (deleted > 0) {
-      // 로컬 리스트에서 제거
-      _photos.removeWhere((p) => idsToDelete.contains(p.id));
-      _selectedIds.clear();
-      _selectMode = false;
+    // 1) 로컬에서 즉시 삭제 (항상 성공)
+    _photos.removeWhere((p) => idsToDelete.contains(p.id));
+    _selectedIds.clear();
+    _selectMode = false;
 
-      // 로컬 DB도 갱신
-      await LocalDatabase.clearPhotos();
-      await LocalDatabase.bulkUpsertPhotos(_photos);
+    final db = await LocalDatabase.database;
+    for (final id in idsToDelete) {
+      await db.delete('photos', where: 'id = ?', whereArgs: [id]);
+    }
+    notifyListeners();
 
-      notifyListeners();
+    // 2) 서버 삭제 시도 (백그라운드)
+    try {
+      final deleted = await apiService.deletePhotos(idsToDelete);
+      if (deleted > 0) return count; // 서버 삭제 성공
+    } catch (_) {}
+
+    // 3) 서버 실패 → 오프라인 큐에 저장 (나중에 동기화 시 처리)
+    for (final id in idsToDelete) {
+      await db.insert('offline_queue', {
+        'action': 'delete_photo',
+        'photo_id': id,
+        'data': '',
+      });
     }
 
-    return deleted;
+    return count;
   }
 
   /// 검색
