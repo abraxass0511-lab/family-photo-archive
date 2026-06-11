@@ -64,10 +64,12 @@ class SyncProvider extends ChangeNotifier {
           _lastSyncTime = serverTime;
         }
 
-        _syncStatus = '동기화 완료 ✅';
+        // 4. 썸네일/미리보기 로컬 저장 (동기화 완료 전에 실행)
+        _syncStatus = '썸네일 저장 중...';
+        notifyListeners();
+        await _downloadMediaLocally(photoProvider);
 
-        // 4. 백그라운드에서 썸네일/미리보기 로컬 저장
-        _downloadMediaLocally(photoProvider);
+        _syncStatus = '동기화 완료 ✅';
       } else {
         _syncStatus = '데이터를 가져올 수 없습니다';
         return false;
@@ -104,7 +106,7 @@ class SyncProvider extends ChangeNotifier {
     }
   }
 
-  /// 백그라운드: 썸네일/미리보기를 앱 로컬 저장소에 다운로드
+  /// 썸네일/미리보기를 앱 로컬 저장소에 다운로드 (병렬, 점진적 UI 갱신)
   Future<void> _downloadMediaLocally(PhotoProvider photoProvider) async {
     try {
       final dir = await getApplicationDocumentsDirectory();
@@ -116,46 +118,65 @@ class SyncProvider extends ChangeNotifier {
       final db = await LocalDatabase.database;
       final photos = photoProvider.photos;
 
-      for (final photo in photos) {
-        // 1) 썸네일 로컬 저장 (아직 없는 것만)
-        if (photo.localThumbnailPath == null) {
-          final thumbFile = File(p.join(thumbDir.path, '${photo.id}_thumb.jpg'));
-          if (!thumbFile.existsSync()) {
-            final bytes = await apiService.downloadThumbnailBytes(photo.id);
-            if (bytes != null && bytes.isNotEmpty) {
-              await thumbFile.writeAsBytes(bytes);
-            }
-          }
-          if (thumbFile.existsSync()) {
-            await db.update(
-              'photos',
-              {'local_thumbnail_path': thumbFile.path},
-              where: 'id = ?',
-              whereArgs: [photo.id],
-            );
-          }
-        }
+      // 썸네일 다운로드가 필요한 사진만 필터링
+      final needsThumb = photos.where((p) => p.localThumbnailPath == null).toList();
 
-        // 2) 동영상 미리보기 로컬 저장 (동영상만, 아직 없는 것만)
-        final fn = photo.filename.toLowerCase();
-        final isVideo = fn.endsWith('.mp4') || fn.endsWith('.mov') || fn.endsWith('.3gp');
-        if (isVideo && photo.localPreviewPath == null) {
-          final previewFile = File(p.join(previewDir.path, '${photo.id}_preview.mp4'));
-          if (!previewFile.existsSync()) {
-            final bytes = await apiService.downloadPreviewBytes(photo.id);
-            if (bytes != null && bytes.isNotEmpty) {
-              await previewFile.writeAsBytes(bytes);
+      if (needsThumb.isEmpty) return;
+
+      _syncStatus = '썸네일 저장 중... (0/${needsThumb.length})';
+      notifyListeners();
+
+      int completed = 0;
+
+      // 10개씩 병렬 다운로드
+      for (int i = 0; i < needsThumb.length; i += 10) {
+        final batch = needsThumb.skip(i).take(10).toList();
+
+        await Future.wait(batch.map((photo) async {
+          try {
+            // 썸네일
+            final thumbFile = File(p.join(thumbDir.path, '${photo.id}_thumb.jpg'));
+            if (!thumbFile.existsSync()) {
+              final bytes = await apiService.downloadThumbnailBytes(photo.id);
+              if (bytes != null && bytes.isNotEmpty) {
+                await thumbFile.writeAsBytes(bytes);
+              }
             }
-          }
-          if (previewFile.existsSync()) {
-            await db.update(
-              'photos',
-              {'local_preview_path': previewFile.path},
-              where: 'id = ?',
-              whereArgs: [photo.id],
-            );
-          }
-        }
+            if (thumbFile.existsSync()) {
+              await db.update(
+                'photos',
+                {'local_thumbnail_path': thumbFile.path},
+                where: 'id = ?',
+                whereArgs: [photo.id],
+              );
+            }
+
+            // 동영상 미리보기
+            final fn = photo.filename.toLowerCase();
+            final isVideo = fn.endsWith('.mp4') || fn.endsWith('.mov') || fn.endsWith('.3gp');
+            if (isVideo && photo.localPreviewPath == null) {
+              final previewFile = File(p.join(previewDir.path, '${photo.id}_preview.mp4'));
+              if (!previewFile.existsSync()) {
+                final bytes = await apiService.downloadPreviewBytes(photo.id);
+                if (bytes != null && bytes.isNotEmpty) {
+                  await previewFile.writeAsBytes(bytes);
+                }
+              }
+              if (previewFile.existsSync()) {
+                await db.update(
+                  'photos',
+                  {'local_preview_path': previewFile.path},
+                  where: 'id = ?',
+                  whereArgs: [photo.id],
+                );
+              }
+            }
+          } catch (_) {}
+        }));
+
+        completed += batch.length;
+        _syncStatus = '썸네일 저장 중... ($completed/${needsThumb.length})';
+        notifyListeners();
       }
 
       // 로컬 경로 반영을 위해 데이터 리로드
