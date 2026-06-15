@@ -7,6 +7,7 @@ import '../providers/photo_provider.dart';
 import '../providers/sync_provider.dart';
 import '../models/photo_model.dart';
 import '../services/api_service.dart';
+import 'video_autoplay_screen.dart';
 
 /// 백업 갤러리 화면 — 서버에 전송된 사진 목록
 /// 서버 썸네일을 CachedNetworkImage로 표시
@@ -204,6 +205,15 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     setState(() => _showFavoritesOnly = !_showFavoritesOnly),
               ),
               const SizedBox(width: 8),
+              // 동영상 자동재생 버튼
+              _filterChip(
+                icon: Icons.play_circle_filled,
+                label: '동영상 자동재생',
+                isActive: false,
+                activeColor: const Color(0xFF7C6AEF),
+                onTap: () => _launchVideoAutoPlay(provider),
+              ),
+              const SizedBox(width: 8),
               Text(
                 '${provider.photos.length}장 백업됨',
                 style: TextStyle(
@@ -223,19 +233,21 @@ class _GalleryScreenState extends State<GalleryScreen> {
     required String label,
     required bool isActive,
     required VoidCallback onTap,
+    Color? activeColor,
   }) {
+    final color = activeColor ?? const Color(0xFFFF4D6D);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: isActive
-              ? const Color(0xFFFF4D6D).withValues(alpha: 0.15)
+              ? color.withValues(alpha: 0.15)
               : Colors.black.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isActive
-                ? const Color(0xFFFF4D6D).withValues(alpha: 0.3)
+                ? color.withValues(alpha: 0.3)
                 : Colors.black.withValues(alpha: 0.05),
           ),
         ),
@@ -245,18 +257,42 @@ class _GalleryScreenState extends State<GalleryScreen> {
             Icon(
               icon,
               size: 14,
-              color: isActive ? const Color(0xFFFF4D6D) : Colors.black54,
+              color: isActive ? color : Colors.black54,
             ),
             const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
-                color: isActive ? const Color(0xFFFF4D6D) : Colors.black54,
+                color: isActive ? color : Colors.black54,
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 동영상 자동재생 화면 실행
+  void _launchVideoAutoPlay(PhotoProvider provider) {
+    final videos = provider.photos.where((p) {
+      final fn = p.filename.toLowerCase();
+      return fn.endsWith('.mp4') || fn.endsWith('.mov') || fn.endsWith('.3gp');
+    }).toList();
+
+    if (videos.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🎬 백업된 동영상이 없습니다'),
+          backgroundColor: Color(0xFF7C6AEF),
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => VideoAutoPlayScreen(videos: videos),
       ),
     );
   }

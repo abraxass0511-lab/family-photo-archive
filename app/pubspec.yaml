@@ -2,7 +2,7 @@ name: family_photo_archive
 description: 포토 백업 — Wi-Fi 기반 사진/동영상 전송 및 외장하드 자동 이관 앱
 
 publish_to: 'none'
-version: 1.0.0+25
+version: 1.0.0+26
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
