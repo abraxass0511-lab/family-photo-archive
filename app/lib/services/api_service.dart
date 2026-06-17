@@ -147,13 +147,45 @@ class ApiService {
       }
     } on DioException catch (e) {
       if (e.response?.statusCode == 409) {
-        // 이미 전송된 파일 → 에러를 throw해서 duplicate 처리
-        throw Exception('409: 이미 전송된 파일입니다');
+        // 서버 응답: {"detail": "중복|2026-05-29|IMG_1234.jpg"}
+        final detail = e.response?.data?['detail'] ?? '';
+        final parts = detail.toString().split('|');
+        String reason;
+        if (parts.length >= 2 && parts[0] == '중복' && parts[1].isNotEmpty) {
+          reason = '${parts[1]} 이미 전송완료';
+        } else {
+          reason = '이미 전송된 파일';
+        }
+        throw Exception('duplicate:$reason');
       }
-      print('업로드 실패: $e');
-      rethrow;
+      // 실패 사유 분류
+      String failReason;
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        failReason = '연결 시간 초과 (서버 응답 없음)';
+      } else if (e.type == DioExceptionType.receiveTimeout) {
+        failReason = '수신 시간 초과 (파일이 너무 큼)';
+      } else if (e.type == DioExceptionType.connectionError) {
+        failReason = 'Wi-Fi 연결 끊김 또는 서버 접속 불가';
+      } else if (e.response?.statusCode == 400) {
+        final detail = e.response?.data?['detail'] ?? '잘못된 요청';
+        failReason = '$detail';
+      } else if (e.response?.statusCode == 413) {
+        failReason = '파일 크기 초과 (500MB 제한)';
+      } else if (e.response?.statusCode == 500) {
+        failReason = '서버 내부 오류';
+      } else if (e.response != null) {
+        failReason = '서버 오류 (${e.response?.statusCode})';
+      } else {
+        failReason = '네트워크 오류: ${e.message ?? "알 수 없음"}';
+      }
+      throw Exception('fail:$failReason');
+    } catch (e) {
+      if (e.toString().contains('duplicate:') || e.toString().contains('fail:')) {
+        rethrow;
+      }
+      throw Exception('fail:알 수 없는 오류: $e');
     }
-    return null;
   }
 
   /// 사진 파일 업로드 (기본)

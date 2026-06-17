@@ -128,9 +128,23 @@ async def upload_photo(
     file_hash = thumbnail_service.generate_file_hash(contents)
 
     # 중복 확인
-    existing = await db.fetch_one("SELECT id FROM photos WHERE id = ?", (file_hash,))
+    existing = await db.fetch_one(
+        "SELECT id, filename, created_at, taken_at FROM photos WHERE id = ?", (file_hash,)
+    )
     if existing:
-        raise HTTPException(status_code=409, detail="이미 업로드된 사진입니다")
+        # 전송 날짜 정보를 포함한 상세 응답
+        created_at = existing["created_at"] or ""
+        taken_at = existing["taken_at"] or ""
+        existing_filename = existing["filename"] or ""
+        # 전송 날짜를 YYYY-MM-DD 형식으로 변환
+        transfer_date = ""
+        if created_at:
+            try:
+                transfer_date = str(created_at)[:10]  # "2026-05-29 12:34:56" → "2026-05-29"
+            except Exception:
+                transfer_date = str(created_at)
+        detail_msg = f"중복|{transfer_date}|{existing_filename}"
+        raise HTTPException(status_code=409, detail=detail_msg)
 
     # 2. EXIF 메타데이터 추출 (동영상은 파일명에서 날짜 추출)
     exif_data = exif_service.extract_exif(contents, filename=file.filename)

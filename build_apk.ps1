@@ -40,6 +40,7 @@ Write-Host ""
 Write-Host "  소스 동기화 중..." -ForegroundColor Gray
 Copy-Item -Path "$SrcDir\lib\*" -Destination "$BuildDir\lib\" -Recurse -Force
 Copy-Item -Path "$SrcDir\pubspec.yaml" -Destination "$BuildDir\pubspec.yaml" -Force
+Copy-Item -Path "$SrcDir\android\app\src\main\AndroidManifest.xml" -Destination "$BuildDir\android\app\src\main\AndroidManifest.xml" -Force
 Write-Host "  소스 동기화 완료" -ForegroundColor Green
 
 # 4. flutter pub get

@@ -877,11 +877,22 @@ class _TransferScreenState extends State<TransferScreen> {
         .where((item) => item.status == TransferStatus.cancelled)
         .length;
 
+    // 중복/실패 항목 수집
+    final duplicateItems = provider.transferQueue
+        .where((item) => item.status == TransferStatus.duplicate)
+        .toList();
+    final failedItems = provider.transferQueue
+        .where((item) => item.status == TransferStatus.failed)
+        .toList();
+
     return Positioned(
       bottom: 0,
       left: 0,
       right: 0,
       child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.6,
+        ),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.97),
           borderRadius:
@@ -897,99 +908,217 @@ class _TransferScreenState extends State<TransferScreen> {
             ),
           ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 완료/중지 아이콘
-              Text(wasCancelled ? '⏹️' : '🎉',
-                  style: const TextStyle(fontSize: 32)),
-              const SizedBox(height: 10),
-              Text(
-                wasCancelled ? '전송 중지됨' : '전송 완료!',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: wasCancelled
-                      ? const Color(0xFFFF4D6D)
-                      : const Color(0xFF1A1A2E),
-                ),
-              ),
-              if (wasCancelled) ...[
-                const SizedBox(height: 6),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 완료/중지 아이콘
+                Text(wasCancelled ? '⏹️' : '🎉',
+                    style: const TextStyle(fontSize: 32)),
+                const SizedBox(height: 10),
                 Text(
-                  '"${provider.cancelledAtFile}" 까지 전송 완료',
+                  wasCancelled ? '전송 중지됨' : '전송 완료!',
                   style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.black.withValues(alpha: 0.5),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: wasCancelled
+                        ? const Color(0xFFFF4D6D)
+                        : const Color(0xFF1A1A2E),
                   ),
-                  textAlign: TextAlign.center,
                 ),
-              ],
-              const SizedBox(height: 12),
-
-              // 결과 요약
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _resultChip('성공', '${provider.successCount}',
-                      const Color(0xFF4ECDC4)),
-                  const SizedBox(width: 10),
-                  if (provider.duplicateCount > 0)
-                    _resultChip('중복', '${provider.duplicateCount}',
-                        Colors.orange),
-                  if (provider.failCount > 0) ...[
-                    const SizedBox(width: 10),
-                    _resultChip('실패', '${provider.failCount}',
-                        const Color(0xFFFF4D6D)),
-                  ],
-                  if (cancelledCount > 0) ...[
-                    const SizedBox(width: 10),
-                    _resultChip('미전송', '$cancelledCount',
-                        Colors.grey),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // 버튼들
-              Row(
-                children: [
-                  // 닫기
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => provider.clearQueue(),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                            color: Colors.black.withValues(alpha: 0.3)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: const Text('닫기',
-                          style: TextStyle(color: Colors.black87)),
+                if (wasCancelled) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '"${provider.cancelledAtFile}" 까지 전송 완료',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.black.withValues(alpha: 0.5),
                     ),
+                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(width: 10),
+                ],
+                const SizedBox(height: 12),
 
-                  // 전송된 사진 삭제
-                  if (provider.successCount > 0)
+                // 결과 요약
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _resultChip('성공', '${provider.successCount}',
+                        const Color(0xFF4ECDC4)),
+                    const SizedBox(width: 10),
+                    if (provider.duplicateCount > 0)
+                      _resultChip('중복', '${provider.duplicateCount}',
+                          Colors.orange),
+                    if (provider.failCount > 0) ...[
+                      const SizedBox(width: 10),
+                      _resultChip('실패', '${provider.failCount}',
+                          const Color(0xFFFF4D6D)),
+                    ],
+                    if (cancelledCount > 0) ...[
+                      const SizedBox(width: 10),
+                      _resultChip('미전송', '$cancelledCount',
+                          Colors.grey),
+                    ],
+                  ],
+                ),
+
+                // 중복 사유 목록
+                if (duplicateItems.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _buildReasonSection(
+                    icon: Icons.content_copy,
+                    title: '중복 사유',
+                    color: Colors.orange,
+                    items: duplicateItems,
+                  ),
+                ],
+
+                // 실패 사유 목록
+                if (failedItems.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _buildReasonSection(
+                    icon: Icons.error_outline,
+                    title: '실패 사유',
+                    color: const Color(0xFFFF4D6D),
+                    items: failedItems,
+                  ),
+                ],
+
+                const SizedBox(height: 20),
+
+                // 버튼들
+                Row(
+                  children: [
+                    // 닫기
                     Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () => _confirmDelete(provider),
-                        icon: const Icon(Icons.delete_outline, size: 18),
-                        label: const Text('폰에서 삭제'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF4D6D),
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                      child: OutlinedButton(
+                        onPressed: () => provider.clearQueue(),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                              color: Colors.black.withValues(alpha: 0.3)),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text('닫기',
+                            style: TextStyle(color: Colors.black87)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+
+                    // 전송된 사진 삭제
+                    if (provider.successCount > 0)
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => _confirmDelete(provider),
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          label: const Text('폰에서 삭제'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFFF4D6D),
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 14),
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 중복/실패 사유 섹션
+  Widget _buildReasonSection({
+    required IconData icon,
+    required String title,
+    required Color color,
+    required List<TransferItem> items,
+  }) {
+    // 같은 사유끼리 그룹핑
+    final reasonGroups = <String, List<String>>{};
+    for (final item in items) {
+      final reason = item.errorMessage ?? '사유 없음';
+      final filename = item.asset.title ?? item.file?.path.split('/').last ?? '파일';
+      reasonGroups.putIfAbsent(reason, () => []).add(filename);
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 헤더
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Text(
+                '$title (${items.length}건)',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 8),
+          // 사유별 목록
+          ...reasonGroups.entries.map((entry) {
+            final reason = entry.key;
+            final files = entry.value;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 사유
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('→ ', style: TextStyle(fontSize: 12, color: color)),
+                      Expanded(
+                        child: Text(
+                          reason,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: color.withValues(alpha: 0.9),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // 파일명들 (최대 3개 + "외 N개")
+                  const SizedBox(height: 2),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Text(
+                      files.length <= 3
+                          ? files.join(', ')
+                          : '${files.take(3).join(', ')} 외 ${files.length - 3}개',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.black.withValues(alpha: 0.4),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

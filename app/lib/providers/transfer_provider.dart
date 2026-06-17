@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../services/gallery_service.dart';
 import '../services/api_service.dart';
 
@@ -42,6 +44,7 @@ class TransferProvider extends ChangeNotifier {
   bool _cancelRequested = false;
   String? _cancelledAtFile;
   bool _showTransferredOnly = false;
+  bool _foregroundServiceInitialized = false;
 
   // 전송 통계
   int _successCount = 0;
@@ -100,10 +103,109 @@ class TransferProvider extends ChangeNotifier {
     return total / _transferQueue.length;
   }
 
+  // ===================================================================
+  // 백그라운드 전송 서비스 (Foreground Service + Wakelock)
+  // ===================================================================
+
+  /// Foreground Service 초기화 (한 번만)
+  void _initForegroundTask() {
+    if (_foregroundServiceInitialized) return;
+    _foregroundServiceInitialized = true;
+
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'photo_transfer',
+        channelName: '사진 전송',
+        channelDescription: '사진/동영상을 서버로 전송 중입니다',
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(
+        showNotification: false,
+      ),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.nothing(),
+        autoRunOnBoot: false,
+        autoRunOnMyPackageReplaced: false,
+        allowWakeLock: true,
+        allowWifiLock: true,
+      ),
+    );
+  }
+
+  /// 전송 시작 시 Foreground Service 시작 + Wakelock 켜기
+  Future<void> _startForegroundService(int totalCount) async {
+    _initForegroundTask();
+
+    try {
+      // Wakelock 켜기 (화면 꺼짐 방지)
+      await WakelockPlus.enable();
+    } catch (e) {
+      debugPrint('⚠️ Wakelock 활성화 실패: $e');
+    }
+
+    try {
+      await FlutterForegroundTask.startService(
+        notificationTitle: '📤 포토 백업',
+        notificationText: '전송 준비 중... (0/$totalCount)',
+        callback: _foregroundTaskCallback,
+      );
+    } catch (e) {
+      debugPrint('⚠️ Foreground Service 시작 실패: $e');
+    }
+  }
+
+  /// 알림바 진행률 업데이트
+  Future<void> _updateNotification(int current, int total, String filename) async {
+    try {
+      final percent = total > 0 ? (current * 100 ~/ total) : 0;
+      await FlutterForegroundTask.updateService(
+        notificationTitle: '📤 포토 백업 — 전송 중',
+        notificationText: '$current/$total ($percent%) • $filename',
+      );
+    } catch (_) {}
+  }
+
+  /// 전송 완료 시 Foreground Service 종료 + Wakelock 끄기
+  Future<void> _stopForegroundService({String? resultText}) async {
+    try {
+      if (resultText != null) {
+        await FlutterForegroundTask.updateService(
+          notificationTitle: '✅ 포토 백업 완료',
+          notificationText: resultText,
+        );
+        // 2초 후 서비스 종료 (사용자가 알림 볼 시간)
+        await Future.delayed(const Duration(seconds: 2));
+      }
+      await FlutterForegroundTask.stopService();
+    } catch (e) {
+      debugPrint('⚠️ Foreground Service 종료 실패: $e');
+    }
+
+    try {
+      await WakelockPlus.disable();
+    } catch (e) {
+      debugPrint('⚠️ Wakelock 비활성화 실패: $e');
+    }
+  }
+
+  // ===================================================================
+  // 기존 기능
+  // ===================================================================
+
   /// 갤러리 권한 요청 + 초기 로드
   Future<void> initialize() async {
     _hasPermission = await galleryService.requestPermission();
     if (!_hasPermission) return;
+
+    // 알림 권한 요청 (Android 13+, 백그라운드 전송 알림용)
+    try {
+      final notificationPermission =
+          await FlutterForegroundTask.checkNotificationPermission();
+      if (notificationPermission != NotificationPermission.granted) {
+        await FlutterForegroundTask.requestNotificationPermission();
+      }
+    } catch (_) {}
 
     await galleryService.loadTransferredHashes();
     await _loadTransferredAssetIds();
@@ -244,7 +346,10 @@ class TransferProvider extends ChangeNotifier {
     }
     notifyListeners();
 
-    // 3. 순차 전송
+    // 3. 백그라운드 서비스 시작 + Wakelock 켜기
+    await _startForegroundService(_transferQueue.length);
+
+    // 4. 순차 전송
     for (int i = 0; i < _transferQueue.length; i++) {
       // 중지 요청 확인 — 현재 파일 전송 전에 체크
       if (_cancelRequested) {
@@ -257,6 +362,7 @@ class TransferProvider extends ChangeNotifier {
       }
 
       final item = _transferQueue[i];
+      final filename = item.asset.title ?? '파일';
 
       try {
         // 파일 준비
@@ -278,6 +384,9 @@ class TransferProvider extends ChangeNotifier {
         item.status = TransferStatus.uploading;
         item.progress = 0.1;
         notifyListeners();
+
+        // 알림바 업데이트
+        await _updateNotification(i + 1, _transferQueue.length, filename);
 
         // 앱에서 위치 데이터 가져오기 (삼성 갤러리 보정 포함)
         double? lat;
@@ -319,14 +428,26 @@ class TransferProvider extends ChangeNotifier {
           _failCount++;
         }
       } catch (e) {
-        if (e.toString().contains('409') ||
-            e.toString().contains('이미 전송')) {
+        final msg = e.toString();
+        if (msg.contains('duplicate:')) {
           item.status = TransferStatus.duplicate;
           item.progress = 1.0;
+          // "Exception: duplicate:2026-05-29 이미 전송완료" → "2026-05-29 이미 전송완료"
+          final reasonStart = msg.indexOf('duplicate:');
+          item.errorMessage = reasonStart >= 0
+              ? msg.substring(reasonStart + 'duplicate:'.length)
+              : '이미 전송된 파일';
           _duplicateCount++;
+        } else if (msg.contains('fail:')) {
+          item.status = TransferStatus.failed;
+          final reasonStart = msg.indexOf('fail:');
+          item.errorMessage = reasonStart >= 0
+              ? msg.substring(reasonStart + 'fail:'.length)
+              : '전송 실패';
+          _failCount++;
         } else {
           item.status = TransferStatus.failed;
-          item.errorMessage = e.toString();
+          item.errorMessage = '알 수 없는 오류';
           _failCount++;
         }
       }
@@ -343,6 +464,19 @@ class TransferProvider extends ChangeNotifier {
         break;
       }
     }
+
+    // 5. 전송 완료 — 서비스 종료 + Wakelock 끄기
+    final resultParts = <String>[];
+    if (_successCount > 0) resultParts.add('성공 $_successCount');
+    if (_duplicateCount > 0) resultParts.add('중복 $_duplicateCount');
+    if (_failCount > 0) resultParts.add('실패 $_failCount');
+    final resultText = resultParts.isNotEmpty ? resultParts.join(' · ') : '완료';
+
+    await _stopForegroundService(
+      resultText: _cancelRequested
+          ? '중지됨 — $resultText'
+          : resultText,
+    );
 
     _isTransferring = false;
     _selectedIds.clear();
@@ -394,4 +528,22 @@ class TransferProvider extends ChangeNotifier {
     _duplicateCount = 0;
     notifyListeners();
   }
+}
+
+/// Foreground Task 콜백 (서비스 유지용, 실제 작업은 메인 isolate에서 수행)
+@pragma('vm:entry-point')
+void _foregroundTaskCallback() {
+  FlutterForegroundTask.setTaskHandler(_TransferTaskHandler());
+}
+
+/// 더미 태스크 핸들러 (서비스 유지 목적)
+class _TransferTaskHandler extends TaskHandler {
+  @override
+  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {}
+
+  @override
+  void onRepeatEvent(DateTime timestamp) {}
+
+  @override
+  Future<void> onDestroy(DateTime timestamp) async {}
 }
