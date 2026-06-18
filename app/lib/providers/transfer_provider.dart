@@ -438,6 +438,9 @@ class TransferProvider extends ChangeNotifier {
               ? msg.substring(reasonStart + 'duplicate:'.length)
               : '이미 전송된 파일';
           _duplicateCount++;
+          // 중복 = 이미 서버에 있음 → 전송됨으로 표시 (구름 아이콘)
+          _transferredAssetIds.add(item.asset.id);
+          await _saveTransferredAssetIds();
         } else if (msg.contains('fail:')) {
           item.status = TransferStatus.failed;
           final reasonStart = msg.indexOf('fail:');
