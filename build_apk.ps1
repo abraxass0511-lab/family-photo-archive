@@ -1,8 +1,7 @@
 # ============================================
 # 포토백업 APK 빌드 스크립트
-# - pubspec.yaml 빌드번호 자동 +1
-# - 한글 경로 우회 (c:\src\photo-backup 사용)
-# - 바탕화면에 포토백업_vXX.apk 복사
+# - 한글 경로 완전 우회: cmd /c 사용
+# - 매 단계 검증 + 실패 시 즉시 중단
 # ============================================
 
 $ErrorActionPreference = "Stop"
@@ -18,10 +17,32 @@ Write-Host "  포토백업 APK 빌드 시작" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
 # ──────────────────────────────────────────────
-# 1. pubspec.yaml에서 현재 빌드번호 읽기
-#    (-Raw 대신 Out-String 사용 — PowerShell 호환)
+# 1. 소스 동기화 (cmd /c xcopy로 한글 경로 우회)
 # ──────────────────────────────────────────────
-$pubspec = Get-Content "$SrcDir\pubspec.yaml" | Out-String
+Write-Host ""
+Write-Host "  소스 동기화 중..." -ForegroundColor Gray
+cmd /c xcopy "$SrcDir\lib" "$BuildDir\lib" /E /Y /Q > $null 2>&1
+cmd /c copy /Y "$SrcDir\pubspec.yaml" "$BuildDir\pubspec.yaml" > $null 2>&1
+cmd /c copy /Y "$SrcDir\android\app\src\main\AndroidManifest.xml" "$BuildDir\android\app\src\main\AndroidManifest.xml" > $null 2>&1
+
+# ★ 검증: 핵심 파일이 빌드 디렉토리에 존재하는지 확인
+$checkFiles = @(
+    "$BuildDir\lib\providers\transfer_provider.dart",
+    "$BuildDir\pubspec.yaml",
+    "$BuildDir\android\app\src\main\AndroidManifest.xml"
+)
+foreach ($f in $checkFiles) {
+    if (-not (Test-Path $f)) {
+        Write-Host "  ERROR: 소스 동기화 실패! 파일 없음: $f" -ForegroundColor Red
+        exit 1
+    }
+}
+Write-Host "  소스 동기화 완료 (파일 존재 확인됨)" -ForegroundColor Green
+
+# ──────────────────────────────────────────────
+# 2. pubspec.yaml 버전 읽기 + 증가 (빌드 디렉토리에서)
+# ──────────────────────────────────────────────
+$pubspec = Get-Content "$BuildDir\pubspec.yaml" | Out-String
 if ($pubspec -match 'version:\s*(\d+\.\d+\.\d+)\+(\d+)') {
     $versionName = $Matches[1]
     $oldBuild = [int]$Matches[2]
@@ -33,41 +54,24 @@ if ($pubspec -match 'version:\s*(\d+\.\d+\.\d+)\+(\d+)') {
     exit 1
 }
 
-# ──────────────────────────────────────────────
-# 2. pubspec.yaml 빌드번호 자동 증가
-# ──────────────────────────────────────────────
+# 빌드 디렉토리의 pubspec 버전 업데이트
 $newPubspec = $pubspec -replace "version:\s*\d+\.\d+\.\d+\+\d+", "version: $versionName+$newBuild"
-Set-Content "$SrcDir\pubspec.yaml" -Value $newPubspec -NoNewline
+Set-Content "$BuildDir\pubspec.yaml" -Value $newPubspec -NoNewline
 
-# ★ 검증: 실제로 버전이 바뀌었는지 확인
-$verifyPubspec = Get-Content "$SrcDir\pubspec.yaml" | Out-String
+# ★ 검증: 빌드 디렉토리 pubspec 버전 확인
+$verifyPubspec = Get-Content "$BuildDir\pubspec.yaml" | Out-String
 if ($verifyPubspec -match "version:\s*$versionName\+$newBuild") {
-    Write-Host "  pubspec.yaml 업데이트 완료 (v$newBuild 확인됨)" -ForegroundColor Green
+    Write-Host "  빌드 디렉토리 pubspec v$newBuild 확인됨" -ForegroundColor Green
 } else {
-    Write-Host "  ERROR: pubspec.yaml 버전 업데이트 실패! 파일 내용 확인 필요" -ForegroundColor Red
+    Write-Host "  ERROR: 빌드 디렉토리 pubspec 버전 업데이트 실패!" -ForegroundColor Red
     exit 1
 }
 
-# ──────────────────────────────────────────────
-# 3. 빌드 디렉토리에 소스 동기화
-# ──────────────────────────────────────────────
-Write-Host ""
-Write-Host "  소스 동기화 중..." -ForegroundColor Gray
-Copy-Item -Path "$SrcDir\lib\*" -Destination "$BuildDir\lib\" -Recurse -Force
-Copy-Item -Path "$SrcDir\pubspec.yaml" -Destination "$BuildDir\pubspec.yaml" -Force
-Copy-Item -Path "$SrcDir\android\app\src\main\AndroidManifest.xml" -Destination "$BuildDir\android\app\src\main\AndroidManifest.xml" -Force
-
-# ★ 검증: 빌드 디렉토리 pubspec에도 새 버전이 반영됐는지 확인
-$buildPubspec = Get-Content "$BuildDir\pubspec.yaml" | Out-String
-if ($buildPubspec -match "version:\s*$versionName\+$newBuild") {
-    Write-Host "  소스 동기화 완료 (빌드 디렉토리 v$newBuild 확인됨)" -ForegroundColor Green
-} else {
-    Write-Host "  ERROR: 빌드 디렉토리 pubspec.yaml 동기화 실패!" -ForegroundColor Red
-    exit 1
-}
+# 원본 pubspec도 업데이트 (cmd /c copy로 역복사)
+cmd /c copy /Y "$BuildDir\pubspec.yaml" "$SrcDir\pubspec.yaml" > $null 2>&1
 
 # ──────────────────────────────────────────────
-# 4. flutter pub get
+# 3. flutter pub get
 # ──────────────────────────────────────────────
 Write-Host ""
 Write-Host "  패키지 설치 중..." -ForegroundColor Gray
@@ -81,7 +85,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "  패키지 설치 완료" -ForegroundColor Green
 
 # ──────────────────────────────────────────────
-# 5. APK 빌드
+# 4. APK 빌드
 # ──────────────────────────────────────────────
 Write-Host ""
 Write-Host "  APK 빌드 중... (1~3분 소요)" -ForegroundColor Yellow
@@ -96,22 +100,22 @@ if ($exitCode -ne 0) {
     exit 1
 }
 
-# ★ 검증: APK 파일이 실제로 생성됐는지 확인
+# ★ 검증: APK 파일 존재 확인
 $apkSrc = "$BuildDir\build\app\outputs\flutter-apk\app-release.apk"
 if (-not (Test-Path $apkSrc)) {
-    Write-Host "  ERROR: APK 파일이 생성되지 않았습니다: $apkSrc" -ForegroundColor Red
+    Write-Host "  ERROR: APK 파일이 생성되지 않았습니다!" -ForegroundColor Red
     exit 1
 }
 $apkSize = [math]::Round((Get-Item $apkSrc).Length / 1MB, 1)
 Write-Host "  APK 생성 완료 (${apkSize}MB)" -ForegroundColor Green
 
 # ──────────────────────────────────────────────
-# 6. 바탕화면에 복사 (cmd /c copy로 한글 경로 우회)
+# 5. 바탕화면에 복사 (cmd /c copy로 한글 경로 우회)
 # ──────────────────────────────────────────────
 $apkDst = "$Desktop\포토백업_v$newBuild.apk"
 cmd /c copy /Y "$apkSrc" "$apkDst" > $null 2>&1
 
-# ★ 검증: 바탕화면에 실제로 복사됐는지 확인
+# ★ 검증: 바탕화면 복사 확인
 if (-not (Test-Path $apkDst)) {
     Write-Host "  WARNING: 바탕화면 복사 실패. 수동 복사 필요:" -ForegroundColor Yellow
     Write-Host "    $apkSrc" -ForegroundColor Gray
